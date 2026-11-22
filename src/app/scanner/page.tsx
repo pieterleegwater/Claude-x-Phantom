@@ -59,7 +59,7 @@ export default function ScannerPage() {
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div className="relative w-full max-w-xs">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-ink-3" />
-          <input className={cn(inputCls, "pl-8 font-sans")} placeholder="Filter by symbol or paste a mint…" value={q} onChange={(e) => setQ(e.target.value.trim())} />
+          <input className={cn(inputCls, "pl-8 font-sans")} placeholder="Search symbol or paste mint" value={q} onChange={(e) => setQ(e.target.value.trim())} />
         </div>
         {q.length >= 32 && (
           <Button size="sm" onClick={() => router.push(`/scanner/${q}`)}>

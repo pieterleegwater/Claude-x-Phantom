@@ -71,8 +71,8 @@ export function Stat({ label, value, sub, tone, hint }: { label: ReactNode; valu
   return (
     <div className="min-w-0" title={hint}>
       <div className="text-[11px] font-medium uppercase tracking-wider text-ink-3">{label}</div>
-      <div className={cn("num mt-1 truncate text-base font-semibold sm:text-lg", tone === "bull" && "text-bull", tone === "bear" && "text-bear", tone === "warn" && "text-warn")}>{value}</div>
-      {sub && <div className="mt-0.5 truncate text-xs text-ink-3">{sub}</div>}
+      <div className={cn("num mt-1 truncate text-[15px] font-semibold sm:text-lg", tone === "bull" && "text-bull", tone === "bear" && "text-bear", tone === "warn" && "text-warn")}>{value}</div>
+      {sub && <div className="mt-0.5 line-clamp-2 text-xs text-ink-3 [overflow-wrap:anywhere]">{sub}</div>}
     </div>
   );
 }
@@ -87,7 +87,7 @@ export function ErrorBox({ title = "Data unavailable", message, onRetry }: { tit
       <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-bear" />
       <div className="min-w-0 flex-1">
         <div className="font-medium text-ink">{title}</div>
-        <div className="mt-0.5 break-words text-xs text-ink-2">{message}</div>
+        <div className="mt-0.5 break-words text-xs text-ink-2 [overflow-wrap:anywhere]">{message}</div>
         <div className="mt-1 text-xs text-ink-3">EdgePilot never substitutes fake data. Check Settings → Integrations or try again.</div>
       </div>
       {onRetry && (
@@ -211,23 +211,68 @@ export function timeAgo(ms: number | undefined) {
 }
 
 /** Shows where data came from, when, and whether it is delayed. */
+/** Short label for a (possibly long, comma/plus separated) provider list. */
+export function shortSource(src: string) {
+  const parts = src.split(/\s*(?:,|\+)\s*/).map((x) => x.split("(")[0].replace(/\[.*?\]/g, "").trim()).filter(Boolean);
+  const first = parts[0] ?? src;
+  return parts.length > 1 ? `${first} +${parts.length - 1}` : first;
+}
+
+/** Shows where data came from, when, and whether it is delayed. Tap/click for full details. */
 export function DataBadge({ meta, loading }: { meta?: DataMeta; loading?: boolean }) {
   const [, force] = useState(0);
+  const [open, setOpen] = useState(false);
   useEffect(() => {
     const id = setInterval(() => force((x) => x + 1), 5000);
     return () => clearInterval(id);
   }, []);
   if (!meta) return <span className="text-[11px] text-ink-3">{loading ? "Loading…" : ""}</span>;
-  const title = [`Source: ${meta.source}`, `Fetched: ${new Date(meta.fetchedAt).toLocaleString()}`, meta.dataTime ? `Newest datapoint: ${new Date(meta.dataTime).toLocaleString()}` : "", meta.note ?? "", meta.errors?.length ? `Fallbacks used after errors: ${meta.errors.join(" | ")}` : ""].filter(Boolean).join("\n");
   return (
-    <span title={title} className="inline-flex max-w-full items-center gap-1.5 truncate text-[11px] text-ink-3">
-      <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", meta.delayed ? "bg-warn" : "bg-bull", loading && "animate-pulse-soft")} />
-      <span className="truncate">
-        {meta.source.split("(")[0].trim()} · {timeAgo(meta.fetchedAt)}
-        {meta.delayed ? " · DELAYED" : " · live"}
-        {meta.errors?.length ? " · fallback" : ""}
-      </span>
-    </span>
+    <>
+      <button type="button" onClick={() => setOpen(true)} className="inline-flex min-w-0 max-w-full items-center gap-1.5 text-left text-[11px] text-ink-3 hover:text-ink-2" aria-label="Data source details">
+        <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", meta.delayed ? "bg-warn" : "bg-bull", loading && "animate-pulse-soft")} />
+        <span className="min-w-0 truncate">
+          {shortSource(meta.source)} · {timeAgo(meta.fetchedAt)}
+          {meta.delayed ? " · DELAYED" : " · live"}
+          {meta.errors?.length ? " · fallback" : ""}
+        </span>
+      </button>
+      <Modal open={open} onClose={() => setOpen(false)} title="Data source">
+        <dl className="space-y-3 text-sm">
+          <div>
+            <dt className="text-[11px] uppercase tracking-wider text-ink-3">Providers</dt>
+            <dd className="mt-1 break-words text-ink">{meta.source}</dd>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <dt className="text-[11px] uppercase tracking-wider text-ink-3">Fetched</dt>
+              <dd className="num mt-1 text-xs">{new Date(meta.fetchedAt).toLocaleString()}</dd>
+            </div>
+            <div>
+              <dt className="text-[11px] uppercase tracking-wider text-ink-3">Status</dt>
+              <dd className={cn("mt-1 text-xs font-medium", meta.delayed ? "text-warn" : "text-bull")}>{meta.delayed ? "Delayed" : "Live"}</dd>
+            </div>
+          </div>
+          {meta.dataTime && (
+            <div>
+              <dt className="text-[11px] uppercase tracking-wider text-ink-3">Newest datapoint</dt>
+              <dd className="num mt-1 text-xs">{new Date(meta.dataTime).toLocaleString()}</dd>
+            </div>
+          )}
+          {meta.note && <p className="text-xs text-ink-2">{meta.note}</p>}
+          {meta.errors?.length ? (
+            <div>
+              <dt className="text-[11px] uppercase tracking-wider text-ink-3">Fallbacks used (earlier providers failed)</dt>
+              <dd className="mt-1 space-y-1">
+                {meta.errors.map((e, i) => (
+                  <p key={i} className="break-words text-xs text-ink-3 [overflow-wrap:anywhere]">{e}</p>
+                ))}
+              </dd>
+            </div>
+          ) : null}
+        </dl>
+      </Modal>
+    </>
   );
 }
 
@@ -283,7 +328,7 @@ export function Field({ label, children, hint }: { label: ReactNode; children: R
   );
 }
 
-export const inputCls = "h-9 w-full rounded-lg border border-line-2 bg-bg px-3 text-sm text-ink outline-none transition focus:border-accent/60 num";
+export const inputCls = "h-10 w-full min-w-0 rounded-lg border border-line-2 bg-bg px-3 text-sm text-ink outline-none transition focus:border-accent/60 sm:h-9";
 
 export function NumInput({ value, onChange, step, min, max, className }: { value: number | null; onChange: (v: number) => void; step?: number; min?: number; max?: number; className?: string }) {
   const [txt, setTxt] = useState(value == null || !Number.isFinite(value) ? "" : String(value));
@@ -298,7 +343,7 @@ export function NumInput({ value, onChange, step, min, max, className }: { value
   return (
     <input
       inputMode="decimal"
-      className={cn(inputCls, className)}
+      className={cn(inputCls, "num", className)}
       value={txt}
       step={step}
       min={min}
@@ -350,13 +395,13 @@ export function Toggle({ checked, onChange, label }: { checked: boolean; onChang
 export function PageHeader({ title, subtitle, right, beginner }: { title: string; subtitle?: string; right?: ReactNode; beginner?: ReactNode }) {
   const isBeginner = useStore((s) => s.settings.beginnerMode);
   return (
-    <div className="mb-5 space-y-3">
+    <div className="mb-4 space-y-3 sm:mb-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-lg font-semibold tracking-tight sm:text-2xl">{title}</h1>
-          {subtitle && <p className="mt-1 text-sm text-ink-3">{subtitle}</p>}
+        <div className="min-w-0 max-w-full">
+          <h1 className="text-lg font-semibold tracking-tight [overflow-wrap:anywhere] sm:text-2xl">{title}</h1>
+          {subtitle && <p className="mt-1 text-sm text-ink-3 [overflow-wrap:anywhere]">{subtitle}</p>}
         </div>
-        {right && <div className="flex flex-wrap items-center gap-2">{right}</div>}
+        {right && <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">{right}</div>}
       </div>
       {isBeginner && beginner && <Notice>{beginner}</Notice>}
     </div>
@@ -376,6 +421,14 @@ export function pct(n: number | null | undefined, digits = 2, sign = true) {
 export function compact(n: number | null | undefined) {
   if (n == null || !Number.isFinite(n)) return "—";
   return Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 2 }).format(n);
+}
+
+/** Token quantity: 1.2345, 532.93, 123.46M — never scientific notation. */
+export function qty(n: number | null | undefined) {
+  if (n == null || !Number.isFinite(n)) return "—";
+  if (Math.abs(n) >= 100_000) return compact(n);
+  if (Math.abs(n) >= 1) return n.toLocaleString("en-US", { maximumFractionDigits: 2 });
+  return n.toPrecision(3);
 }
 
 export function price(n: number | null | undefined) {

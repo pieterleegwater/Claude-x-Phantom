@@ -2,7 +2,7 @@
 import { useMemo, useState } from "react";
 import { Download } from "lucide-react";
 import { useStore } from "@/lib/client/store";
-import { Badge, Button, Card, PageHeader, Segmented, cn, price, usd } from "@/components/ui";
+import { Badge, Button, Card, PageHeader, Segmented, cn, price, usd , qty } from "@/components/ui";
 
 export default function HistoryPage() {
   const paper = useStore((s) => s.paper);
@@ -102,7 +102,7 @@ export default function HistoryPage() {
                     <span className="truncate font-medium">{f.asset}</span>
                     <Badge tone={f.reason.startsWith("tp") ? "bull" : f.reason === "manual" ? "neutral" : "bear"}>{f.reason}</Badge>
                   </div>
-                  <div className="num mt-0.5 truncate text-[11px] text-ink-3">{f.side} {f.qty.toPrecision(3)} · {price(f.entry)} → {price(f.exit)} · fees {usd(f.fees)}</div>
+                  <div className="num mt-0.5 truncate text-[11px] text-ink-3">{f.side} {qty(f.qty)} · {price(f.entry)} → {price(f.exit)} · fees {usd(f.fees)}</div>
                 </div>
                 <div className="text-right">
                   <div className={cn("num text-sm font-semibold", f.pnl >= 0 ? "text-bull" : "text-bear")}>{usd(f.pnl)}</div>
@@ -133,7 +133,7 @@ export default function HistoryPage() {
                     <td className="px-2 py-1.5 text-ink-3">{new Date(f.closedAt).toLocaleString()}</td>
                     <td className="px-2 py-1.5">{f.asset}</td>
                     <td className="px-2 py-1.5"><Badge tone={f.side === "long" ? "bull" : "bear"}>{f.side}</Badge></td>
-                    <td className="num px-2 py-1.5 text-right">{f.qty.toPrecision(4)}</td>
+                    <td className="num px-2 py-1.5 text-right">{qty(f.qty)}</td>
                     <td className="num px-2 py-1.5 text-right">{price(f.entry)}</td>
                     <td className="num px-2 py-1.5 text-right">{price(f.exit)}</td>
                     <td className="px-2 py-1.5"><Badge tone={f.reason.startsWith("tp") ? "bull" : f.reason === "manual" ? "neutral" : "bear"}>{f.reason}</Badge></td>

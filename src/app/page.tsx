@@ -67,16 +67,18 @@ export default function Overview() {
           ) : !sig ? (
             <Skeleton className="h-36" />
           ) : (
-            <div className="flex items-start gap-4">
-              <ScoreRing score={sig.qualityScore} size={56} muted={sig.direction === "NO_TRADE"} />
-              <div className="min-w-0 flex-1 space-y-2">
-                <div className="flex flex-wrap items-center gap-2">
+            <div className="space-y-2.5">
+              <div className="flex items-center gap-3">
+                <ScoreRing score={sig.qualityScore} size={48} muted={sig.direction === "NO_TRADE"} />
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
                   <DirectionBadge d={sig.direction} large />
                   <span className="text-sm text-ink-2">{sig.setupType}</span>
                 </div>
+              </div>
+              <div className="space-y-2 sm:pl-[60px]">
                 <p className="text-sm leading-relaxed">{sig.summary}</p>
                 <p className="text-xs leading-relaxed text-ink-3">{sig.explanation.slice(0, 420)}{sig.explanation.length > 420 ? "…" : ""}</p>
-                <div className="flex flex-wrap gap-4 pt-1 text-xs">
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1 pt-1 text-xs sm:flex sm:flex-wrap">
                   <span className="text-ink-3">
                     Long score <span className="num text-ink">{btc.analysis?.snapshot.longScore}</span>
                   </span>

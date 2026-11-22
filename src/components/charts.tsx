@@ -103,7 +103,7 @@ export function CandleChart({ candles, overlays = [], priceLines = [], markers =
       extra.push(vol);
     }
     for (const o of overlays) {
-      const ls = chart.addSeries(LineSeries, { color: o.color, lineWidth: o.width ?? 1, priceLineVisible: false, lastValueVisible: false, title: o.title, crosshairMarkerVisible: false });
+      const ls = chart.addSeries(LineSeries, { color: o.color, lineWidth: o.width ?? 1, priceLineVisible: false, lastValueVisible: false, title: phone ? "" : o.title, crosshairMarkerVisible: false });
       ls.setData(candles.map((k, i) => ({ time: k.time as UTCTimestamp, value: o.values[i] })).filter((p) => Number.isFinite(p.value)));
       extra.push(ls);
     }

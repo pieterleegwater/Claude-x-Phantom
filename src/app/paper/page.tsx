@@ -6,7 +6,7 @@ import { useApi } from "@/lib/client/useApi";
 import { available, closeQty, equity, moveStopToBreakeven, newPaperState, openPosition, stats, unrealized, type PaperMarket } from "@/lib/paper";
 import { planPosition } from "@/lib/risk";
 import type { Ticker } from "@/lib/types";
-import { Badge, Button, Card, Field, Modal, NumInput, Notice, PageHeader, Segmented, Stat, Term, cn, inputCls, pct, price, usd, timeAgo } from "@/components/ui";
+import { Badge, Button, Card, Field, Modal, NumInput, Notice, PageHeader, Segmented, Stat, Term, cn, inputCls, pct, price, usd, timeAgo , qty } from "@/components/ui";
 import { LineChart } from "@/components/charts";
 
 export default function PaperPage() {
@@ -84,7 +84,7 @@ export default function PaperPage() {
                       <div className="num mt-2 grid grid-cols-3 gap-2 text-[11px]">
                         <div><div className="text-ink-3">Entry</div>{price(p.entry)}</div>
                         <div><div className="text-ink-3">Last</div>{price(p.lastPrice)}</div>
-                        <div><div className="text-ink-3">Size</div>{p.qty.toPrecision(3)}</div>
+                        <div><div className="text-ink-3">Size</div>{qty(p.qty)}</div>
                         <div><div className="text-ink-3">Stop</div><span className="text-bear">{price(p.stop)}</span></div>
                         <div><div className="text-ink-3">Next TP</div><span className="text-bull">{price(p.takeProfits.find((t) => !t.hit)?.price ?? null)}</span></div>
                         <div><div className="text-ink-3">Liq.</div><span className="text-warn">{p.liqPrice ? price(p.liqPrice) : "—"}</span></div>
@@ -127,7 +127,7 @@ export default function PaperPage() {
                             </div>
                             <div className="mt-0.5 text-[10px] text-ink-3">{p.market} · {p.setup} · {timeAgo(p.openedAt)}</div>
                           </td>
-                          <td className="num px-2 py-2 text-right">{p.qty.toPrecision(4)}<div className="text-[10px] text-ink-3">{usd(p.qty * p.lastPrice, 0)}</div></td>
+                          <td className="num px-2 py-2 text-right">{qty(p.qty)}<div className="text-[10px] text-ink-3">{usd(p.qty * p.lastPrice, 0)}</div></td>
                           <td className="num px-2 py-2 text-right">{price(p.entry)}</td>
                           <td className="num px-2 py-2 text-right">{price(p.lastPrice)}</td>
                           <td className="num px-2 py-2 text-right text-bear">{price(p.stop)}{p.stop === p.entry && <div className="text-[10px] text-ink-3">break-even</div>}</td>

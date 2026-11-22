@@ -263,18 +263,20 @@ export function SignalCard({ s, compact }: { s: TradeSignal; compact?: boolean }
   };
   return (
     <Card className={cn(expired && "opacity-70")}>
-      <div className="flex items-start gap-3 sm:gap-4">
-        <ScoreRing score={s.qualityScore} size={48} muted={s.direction === "NO_TRADE"} label={s.direction === "NO_TRADE" ? "Market condition score — no qualifying setup, so this is not a trade score" : undefined} />
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <DirectionBadge d={s.direction} large />
-            <span className="text-sm font-semibold">{s.asset}</span>
-            <Badge>{s.market}</Badge>
-            <Badge>{s.timeframe}</Badge>
-            {expired && <Badge tone="warn">expired</Badge>}
-          </div>
-          <p className="mt-2 text-sm leading-relaxed text-ink-2">{s.summary}</p>
-          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-ink-3">
+      <div className="flex items-center gap-3">
+        <ScoreRing score={s.qualityScore} size={46} muted={s.direction === "NO_TRADE"} label={s.direction === "NO_TRADE" ? "Market condition score — no qualifying setup, so this is not a trade score" : undefined} />
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+          <DirectionBadge d={s.direction} large />
+          <span className="min-w-0 max-w-full truncate text-sm font-semibold">{s.asset}</span>
+          <Badge>{s.market}</Badge>
+          <Badge>{s.timeframe}</Badge>
+          {expired && <Badge tone="warn">expired</Badge>}
+        </div>
+      </div>
+      <div className="sm:pl-[58px]">
+        <div>
+          <p className="mt-3 text-sm leading-relaxed text-ink-2 [overflow-wrap:anywhere]">{s.summary}</p>
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-ink-3">
             <span>Setup: {s.setupType}</span>
             <span className="inline-flex items-center gap-1">
               <Clock className="h-3 w-3" /> expires {new Date(s.expiresAt).toLocaleTimeString()}

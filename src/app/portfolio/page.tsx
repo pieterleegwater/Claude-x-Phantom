@@ -74,11 +74,11 @@ export default function PortfolioPage() {
             <div className="space-y-3">
               {positions.map((x) => (
                 <div key={x.p.id}>
-                  <div className="mb-1 flex justify-between text-xs">
-                    <span>
-                      {x.p.asset} <span className="text-ink-3">{x.p.side} · {x.p.market}{x.p.leverage > 1 ? ` · ${x.p.leverage}x` : ""}</span>
+                  <div className="mb-1 flex flex-col gap-0.5 text-xs sm:flex-row sm:justify-between">
+                    <span className="min-w-0 truncate">
+                      <span className="font-medium">{x.p.asset}</span> <span className="text-ink-3">{x.p.side} · {x.p.market}{x.p.leverage > 1 ? ` · ${x.p.leverage}x` : ""}</span>
                     </span>
-                    <span className="num">{usd(x.notional, 0)} · risk {x.riskPct.toFixed(2)}% · <span className={x.u >= 0 ? "text-bull" : "text-bear"}>{usd(x.u)}</span></span>
+                    <span className="num shrink-0">{usd(x.notional, 0)} · risk {x.riskPct.toFixed(2)}% · <span className={x.u >= 0 ? "text-bull" : "text-bear"}>{usd(x.u)}</span></span>
                   </div>
                   <ScoreBar score={Math.min(100, x.pctEq)} />
                 </div>

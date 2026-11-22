@@ -45,7 +45,7 @@ export function SellPanel({ mint, symbol, balanceRaw, decimals, defaultPct = 100
     return (
       <div className="flex items-center justify-between gap-3 rounded-lg border border-line p-3 text-sm text-ink-2">
         <span>Connect Phantom to sell (on iPhone: open EdgePilot inside the Phantom app).</span>
-        <WalletButton />
+        <WalletButton label="Connect" />
       </div>
     );
   if (!balanceRaw || balanceRaw === "0" || decimals == null) return <p className="text-sm text-ink-3">No {symbol} balance found in the connected wallet.</p>;

@@ -58,3 +58,12 @@ body { overscroll-behavior-y: none; }
 .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
 .no-scrollbar { scrollbar-width: none; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
+
+/* ---- Responsive safety net ----------------------------------------------
+   Grid/flex children default to min-width:auto, so ONE long unbreakable string
+   (a provider list, token name, address or URL) widens the whole column and
+   pushes the page sideways on phones. Let them shrink, and let long words wrap. */
+.grid > * { min-width: 0; }
+svg { flex-shrink: 0; }
+body { overflow-wrap: break-word; }
+html, body { overflow-x: clip; max-width: 100%; }

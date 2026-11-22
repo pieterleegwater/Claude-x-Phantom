@@ -43,7 +43,7 @@ export default function LivePage() {
         title="Live Trades"
         subtitle="Your REAL Phantom trades: positions, profit/loss and statistics. Separate from paper trading."
         beginner={<>This page tracks real money. Buys made through EdgePilot are added automatically. Tokens you bought elsewhere (for example in the Phantom app) can be added with <b>Track</b>. Sells you do in Phantom are detected from your wallet balance and recorded at an estimated price.</>}
-        right={!w.connected ? <WalletButton /> : <span className="num text-xs text-ink-3">{w.publicKey ? shortAddr(w.publicKey.toBase58()) : ""}</span>}
+        right={!w.connected ? <WalletButton label="Connect Phantom" /> : <span className="num text-xs text-ink-3">{w.publicKey ? shortAddr(w.publicKey.toBase58()) : ""}</span>}
       />
       {!LIVE_ENABLED && <div className="mb-3"><Notice tone="info">Live execution is disabled on this deployment — you can track positions but not buy or sell from EdgePilot.</Notice></div>}
       {synced.length > 0 && <div className="mb-3"><Notice tone="info">Updated from your wallet: {synced.join(", ")} (sold outside EdgePilot or a Jupiter order filled — price estimated).</Notice></div>}

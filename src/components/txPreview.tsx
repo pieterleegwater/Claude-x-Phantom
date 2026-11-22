@@ -152,7 +152,7 @@ export function TxPreview({ mint, symbol, defaultUsd = 50 }: { mint: string; sym
             <input className="mt-1 h-8 w-full rounded-md border border-line-2 bg-bg px-2 text-xs outline-none" placeholder='Type "CONFIRM"' value={typed} onChange={(e) => setTyped(e.target.value)} />
           </div>
           {!connected ? (
-            <WalletButton />
+            <WalletButton label="Connect Phantom" />
           ) : LIVE ? (
             <Button variant="primary" disabled={!allChecked} onClick={execute}>
               Simulate &amp; send to wallet for approval

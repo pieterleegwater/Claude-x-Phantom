@@ -38,7 +38,7 @@ export function shortAddr(a: string) {
   return `${a.slice(0, 4)}…${a.slice(-4)}`;
 }
 
-export function WalletButton() {
+export function WalletButton({ label }: { label?: string } = {}) {
   const { wallets, wallet, select, connect, disconnect, connected, connecting, publicKey } = useWallet();
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
@@ -93,7 +93,7 @@ export function WalletButton() {
   return (
     <>
       <Button size="sm" onClick={() => setOpen(true)} title="Connect wallet" ariaLabel="Connect wallet">
-        <Wallet className="h-3.5 w-3.5" /> <span className="hidden sm:inline">{connecting ? "Connecting…" : "Connect"}</span>
+        <Wallet className="h-3.5 w-3.5" /> <span className={label ? "" : "hidden sm:inline"}>{connecting ? "Connecting…" : (label ?? "Connect")}</span>
       </Button>
       <Modal open={open} onClose={() => setOpen(false)} title="Connect a Solana wallet">
         <div className="space-y-3">
@@ -275,7 +275,7 @@ export function WalletPanel() {
     return (
       <div className="flex flex-col items-start gap-3 text-sm text-ink-2">
         <p>Connect Phantom to view your SOL and token balances (read-only).</p>
-        <WalletButton />
+        <WalletButton label="Connect Phantom" />
       </div>
     );
   const addr = w.publicKey.toBase58();

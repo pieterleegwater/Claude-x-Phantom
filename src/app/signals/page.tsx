@@ -35,16 +35,16 @@ export default function SignalsPage() {
         }
         right={<Segmented value={tf} onChange={setTf} options={[{ value: "15m", label: "15m" }, { value: "1h", label: "1h" }, { value: "4h", label: "4h" }]} />}
       />
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-5 lg:grid-cols-2 lg:gap-4">
         <div className="space-y-2">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="text-sm font-semibold text-ink-2">BTC Perpetual ({settings.defaultLeverage}x default)</h2>
             <DataBadge meta={perp.primaryMeta} loading={perp.loading} />
           </div>
           {perp.error ? <ErrorBox message={perp.error} onRetry={perp.refresh} /> : perp.analysis ? <SignalCard s={perp.analysis.signal} /> : <Skeleton className="h-72" />}
         </div>
         <div className="space-y-2">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="text-sm font-semibold text-ink-2">BTC Spot (no leverage, no shorting)</h2>
             <DataBadge meta={spot.primaryMeta} loading={spot.loading} />
           </div>
@@ -53,9 +53,9 @@ export default function SignalsPage() {
       </div>
 
       <div className="mt-6 space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="text-sm font-semibold text-ink-2">Solana memecoins — speculative</h2>
-          <div className="flex items-center gap-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-3">
             <span className="text-xs text-ink-3">{rejected > 0 && `${rejected} scanned tokens rejected`}</span>
             <DataBadge meta={memes.meta} loading={memes.loading} />
           </div>
