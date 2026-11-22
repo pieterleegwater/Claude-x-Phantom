@@ -1,0 +1,49 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg: #0b0d10;
+  --color-panel: #12151a;
+  --color-panel-2: #171b21;
+  --color-line: #232831;
+  --color-line-2: #2d333d;
+  --color-ink: #e6e9ee;
+  --color-ink-2: #a6adb9;
+  --color-ink-3: #6b7380;
+  --color-bull: #22c55e;
+  --color-bull-soft: #16341f;
+  --color-bear: #ef4444;
+  --color-bear-soft: #3a1717;
+  --color-warn: #f59e0b;
+  --color-warn-soft: #3a2a0c;
+  --color-info: #60a5fa;
+  --color-info-soft: #15253d;
+  --color-accent: #8b9cff;
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --animate-fade-in: fade-in 0.25s ease-out;
+  --animate-pulse-soft: pulse-soft 2s ease-in-out infinite;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+html, body {
+  background: var(--color-bg);
+  color: var(--color-ink);
+}
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "cv11", "ss01";
+}
+.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+::selection { background: #2b3a66; }
+* { scrollbar-width: thin; scrollbar-color: #2d333d transparent; }
+input, select, textarea { color-scheme: dark; }
+.term { text-decoration: underline dotted var(--color-ink-3); text-underline-offset: 3px; cursor: help; }
