@@ -9,6 +9,7 @@ import {
   createSeriesMarkers,
   LineStyle,
   ColorType,
+  TickMarkType,
   type IChartApi,
   type UTCTimestamp,
   type SeriesMarker,
@@ -20,7 +21,20 @@ const theme = {
   layout: { background: { type: ColorType.Solid, color: "transparent" }, textColor: "#8a919e", fontFamily: "JetBrains Mono, ui-monospace, monospace", fontSize: 11 },
   grid: { vertLines: { color: "rgba(35,40,49,0.6)" }, horzLines: { color: "rgba(35,40,49,0.6)" } },
   rightPriceScale: { borderColor: "#232831" },
-  timeScale: { borderColor: "#232831", timeVisible: true, secondsVisible: false },
+  // Show times in the viewer's LOCAL timezone (lightweight-charts defaults to UTC).
+  timeScale: {
+    borderColor: "#232831",
+    timeVisible: true,
+    secondsVisible: false,
+    tickMarkFormatter: (t: Time, type: TickMarkType) => {
+      const d = new Date((t as number) * 1000);
+      if (type === TickMarkType.Year) return String(d.getFullYear());
+      if (type === TickMarkType.Month) return d.toLocaleDateString(undefined, { month: "short" });
+      if (type === TickMarkType.DayOfMonth) return d.toLocaleDateString(undefined, { day: "numeric", month: "short" });
+      return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hour12: false });
+    },
+  },
+  localization: { timeFormatter: (t: Time) => new Date((t as number) * 1000).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: false }) },
   crosshair: { mode: 0 },
 };
 

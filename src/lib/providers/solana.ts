@@ -128,9 +128,10 @@ interface RcReport {
 }
 
 export async function rugcheck(mint: string): Promise<TokenRisk & { decimals?: number }> {
-  return cached(`rc:${mint}`, 5 * 60_000, async () => {
-    try {
-      const r = await fetchJson<RcReport>("RugCheck", `https://api.rugcheck.xyz/v1/tokens/${mint}/report`, { timeoutMs: 10_000 });
+  // Only successful reports are cached; failures are retried on the next request.
+  try {
+    return await cached(`rc:${mint}`, 5 * 60_000, async () => {
+      const r = await fetchJson<RcReport>("RugCheck", `https://api.rugcheck.xyz/v1/tokens/${mint}/report`, { timeoutMs: 6_000 });
       const known = r.knownAccounts ?? {};
       const marketKeys = new Set((r.markets ?? []).map((m) => m.pubkey));
       const holders = (r.topHolders ?? [])
@@ -154,10 +155,10 @@ export async function rugcheck(mint: string): Promise<TokenRisk & { decimals?: n
         mutableMetadata: r.tokenMeta?.mutable ?? null,
         decimals: r.token?.decimals,
       };
-    } catch (e) {
-      return { source: "RugCheck", fetched: false, error: e instanceof Error ? e.message : String(e), risks: [], topHolders: [] };
-    }
-  });
+    });
+  } catch (e) {
+    return { source: "RugCheck", fetched: false, error: e instanceof Error ? e.message : String(e), risks: [], topHolders: [] };
+  }
 }
 
 async function birdeyeHolders(mint: string): Promise<{ value: number; source: string } | null> {
@@ -178,9 +179,17 @@ export async function scanMemecoins(): Promise<{ tokens: MemeToken[]; sources: s
   // Preliminary ranking without risk data, then enrich the top candidates (RugCheck is rate-limited).
   const pre = tokens.map((t) => ({ t, s: analyzeMeme(t, DEFAULT_SETTINGS).score })).sort((a, b) => b.s - a.s);
   const top = pre.slice(0, 24).map((x) => x.t);
-  await mapLimit(top, 4, async (t) => {
+  // Serverless functions have a hard time limit: stop enriching after a fixed budget.
+  // Tokens that miss the budget are marked "risk report unavailable" (never actionable).
+  const started = Date.now();
+  const BUDGET_MS = 12_000;
+  await mapLimit(top, 6, async (t) => {
+    if (Date.now() - started > BUDGET_MS) {
+      t.risk = { source: "RugCheck", fetched: false, error: "skipped — scan time budget reached, open the token for a full check", risks: [], topHolders: [] };
+      return;
+    }
     t.risk = await rugcheck(t.mint);
-    t.holderCount = await birdeyeHolders(t.mint);
+    if (Date.now() - started < BUDGET_MS) t.holderCount = await birdeyeHolders(t.mint);
   });
   return { tokens: [...top, ...pre.slice(24, 60).map((x) => x.t)], sources: [...sources, "DexScreener pairs", "RugCheck"], errors, candidates: mints.length };
 }

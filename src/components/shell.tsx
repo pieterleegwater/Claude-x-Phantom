@@ -105,18 +105,29 @@ function Notifications() {
   const items = useStore((s) => s.notifications);
   const [open, setOpen] = useState(false);
   const unread = items.filter((n) => !n.read).length;
+  const closeCenter = () => {
+    setOpen(false);
+    setState((s) => ({ notifications: s.notifications.map((n) => (n.read ? n : { ...n, read: true })) }));
+  };
   return (
     <>
       <button onClick={() => setOpen(true)} className="relative rounded-lg p-2 text-ink-2 hover:bg-panel-2 hover:text-ink" aria-label="Notifications">
         <Bell className="h-4.5 w-4.5" />
         {unread > 0 && <span className="num absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-bear px-1 text-[10px] font-bold text-white">{unread > 99 ? "99+" : unread}</span>}
       </button>
-      <Modal open={open} onClose={() => setOpen(false)} title="Notification center">
-        <div className="mb-3 flex items-center justify-between">
-          <span className="text-xs text-ink-3">Configure thresholds in Settings → Notifications.</span>
-          <button className="inline-flex items-center gap-1 text-xs text-accent" onClick={() => setState((s) => ({ notifications: s.notifications.map((n) => ({ ...n, read: true })) }))}>
-            <CheckCheck className="h-3.5 w-3.5" /> Mark all read
-          </button>
+      <Modal open={open} onClose={closeCenter} title="Notification center">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <span className="min-w-0 text-xs text-ink-3">Thresholds: Settings → Notifications.</span>
+          <div className="flex shrink-0 items-center gap-3">
+            <button className="inline-flex items-center gap-1 whitespace-nowrap text-xs text-accent" onClick={() => setState((s) => ({ notifications: s.notifications.map((n) => ({ ...n, read: true })) }))}>
+              <CheckCheck className="h-3.5 w-3.5" /> Mark read
+            </button>
+            {items.length > 0 && (
+              <button className="whitespace-nowrap text-xs text-ink-3 hover:text-bear" onClick={() => setState({ notifications: [] })}>
+                Clear all
+              </button>
+            )}
+          </div>
         </div>
         {items.length === 0 ? (
           <p className="py-8 text-center text-sm text-ink-3">No notifications yet. Alerts appear here while EdgePilot is open.</p>
@@ -129,7 +140,7 @@ function Notifications() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-baseline justify-between gap-2">
                       {n.href ? (
-                        <Link href={n.href} onClick={() => setOpen(false)} className="text-sm font-medium hover:text-accent">
+                        <Link href={n.href} onClick={closeCenter} className="text-sm font-medium hover:text-accent">
                           {n.title}
                         </Link>
                       ) : (

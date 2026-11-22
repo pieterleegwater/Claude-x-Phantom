@@ -57,7 +57,7 @@ export function WalletButton() {
     return (
       <div className="flex items-center gap-1">
         <span className="num hidden rounded-lg border border-line-2 bg-panel-2 px-2.5 py-1.5 text-xs text-ink sm:inline">{shortAddr(publicKey.toBase58())}</span>
-        <Button size="sm" variant="ghost" onClick={() => disconnect()} title="Disconnect wallet">
+        <Button size="sm" variant="ghost" onClick={() => disconnect()} title="Disconnect wallet" ariaLabel="Disconnect wallet">
           <LogOut className="h-3.5 w-3.5" />
         </Button>
       </div>
@@ -67,7 +67,7 @@ export function WalletButton() {
   const phantom = wallets.find((w) => w.adapter.name === "Phantom");
   return (
     <>
-      <Button size="sm" onClick={() => setOpen(true)}>
+      <Button size="sm" onClick={() => setOpen(true)} title="Connect wallet" ariaLabel="Connect wallet">
         <Wallet className="h-3.5 w-3.5" /> <span className="hidden sm:inline">{connecting ? "Connecting…" : "Connect"}</span>
       </Button>
       <Modal open={open} onClose={() => setOpen(false)} title="Connect a Solana wallet">

@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { X, AlertTriangle, Info } from "lucide-react";
 import { GLOSSARY } from "@/lib/glossary";
 import { useStore } from "@/lib/client/store";
@@ -50,7 +51,7 @@ export function DirectionBadge({ d, large }: { d: Direction; large?: boolean }) 
   return <Badge tone={directionTone(d)} className={large ? "px-2.5 py-1 text-sm" : ""}>{d.replace("_", " ")}</Badge>;
 }
 
-export function Button({ children, onClick, variant = "default", size = "md", disabled, type = "button", className, title }: { children: ReactNode; onClick?: () => void; variant?: "default" | "primary" | "ghost" | "bull" | "bear" | "danger"; size?: "sm" | "md"; disabled?: boolean; type?: "button" | "submit"; className?: string; title?: string }) {
+export function Button({ children, onClick, variant = "default", size = "md", disabled, type = "button", className, title, ariaLabel }: { children: ReactNode; onClick?: () => void; variant?: "default" | "primary" | "ghost" | "bull" | "bear" | "danger"; size?: "sm" | "md"; disabled?: boolean; type?: "button" | "submit"; className?: string; title?: string; ariaLabel?: string }) {
   const v = {
     default: "bg-panel-2 border-line-2 text-ink hover:bg-line",
     primary: "bg-accent/90 border-accent text-[#0b0d10] hover:bg-accent",
@@ -60,7 +61,7 @@ export function Button({ children, onClick, variant = "default", size = "md", di
     danger: "bg-bear-soft border-bear/40 text-bear hover:bg-bear/20",
   }[variant];
   return (
-    <button type={type} title={title} disabled={disabled} onClick={onClick} className={cn("inline-flex items-center justify-center gap-1.5 rounded-lg border font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40", size === "sm" ? "h-7 px-2.5 text-xs" : "h-9 px-3.5 text-sm", v, className)}>
+    <button type={type} title={title} aria-label={ariaLabel} disabled={disabled} onClick={onClick} className={cn("inline-flex items-center justify-center gap-1.5 rounded-lg border font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40", size === "sm" ? "h-7 px-2.5 text-xs" : "h-9 px-3.5 text-sm", v, className)}>
       {children}
     </button>
   );
@@ -141,27 +142,62 @@ export function ScoreRing({ score, size = 56, label, muted }: { score: number; s
 export function Term({ k, children }: { k: keyof typeof GLOSSARY | string; children?: ReactNode }) {
   const beginner = useStore((s) => s.settings.beginnerMode);
   const g = GLOSSARY[k];
-  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ left: number; top: number; above: boolean } | null>(null);
   const ref = useRef<HTMLSpanElement>(null);
+  const show = () => {
+    const r = ref.current?.getBoundingClientRect();
+    if (!r) return;
+    const w = Math.min(256, window.innerWidth - 24);
+    const left = Math.max(12, Math.min(r.left, window.innerWidth - w - 12));
+    const above = r.bottom + 140 > window.innerHeight;
+    setPos({ left, top: above ? r.top - 6 : r.bottom + 6, above });
+  };
   useEffect(() => {
-    if (!open) return;
-    const h = (e: MouseEvent) => ref.current && !ref.current.contains(e.target as Node) && setOpen(false);
-    document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
-  }, [open]);
+    if (!pos) return;
+    const close = (e: Event) => {
+      if (e.type === "pointerdown" && ref.current?.contains(e.target as Node)) return;
+      setPos(null);
+    };
+    document.addEventListener("pointerdown", close);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      document.removeEventListener("pointerdown", close);
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
+  }, [pos]);
   if (!g || !beginner) return <>{children ?? g?.term ?? k}</>;
   return (
-    <span ref={ref} className="relative inline">
-      <span className="term" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)} onClick={() => setOpen((o) => !o)}>
+    <>
+      <span
+        ref={ref}
+        className="term"
+        role="button"
+        tabIndex={0}
+        onPointerEnter={(e) => e.pointerType === "mouse" && show()}
+        onPointerLeave={(e) => e.pointerType === "mouse" && setPos(null)}
+        onClick={(e) => {
+          e.preventDefault(); // don't focus the input when the term sits inside a <label>
+          e.stopPropagation();
+          if (pos) setPos(null);
+          else show();
+        }}
+      >
         {children ?? g.term}
       </span>
-      {open && (
-        <span className="absolute left-0 top-full z-50 mt-1 block w-64 rounded-lg border border-line-2 bg-panel-2 p-2.5 text-left text-xs font-normal normal-case leading-relaxed tracking-normal text-ink-2 shadow-xl">
-          <span className="block font-semibold text-ink">{g.term}</span>
-          {g.short}
-        </span>
-      )}
-    </span>
+      {pos &&
+        createPortal(
+          <span
+            style={{ left: pos.left, top: pos.top, transform: pos.above ? "translateY(-100%)" : undefined, width: Math.min(256, window.innerWidth - 24) }}
+            className="pointer-events-none fixed z-[120] block rounded-lg border border-line-2 bg-panel-2 p-2.5 text-left text-xs font-normal normal-case leading-relaxed tracking-normal text-ink-2 shadow-xl"
+          >
+            <span className="block font-semibold text-ink">{g.term}</span>
+            {g.short}
+          </span>,
+          document.body,
+        )}
+    </>
   );
 }
 
@@ -195,26 +231,45 @@ export function DataBadge({ meta, loading }: { meta?: DataMeta; loading?: boolea
   );
 }
 
+let openModals = 0;
+
+/** Rendered in a portal on <body>: an ancestor with backdrop-filter/transform (e.g. the
+ *  blurred sticky header) would otherwise become the containing block for position:fixed
+ *  and clip the dialog to the header's size. */
 export function Modal({ open, onClose, title, children, wide }: { open: boolean; onClose: () => void; title: ReactNode; children: ReactNode; wide?: boolean }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   useEffect(() => {
     if (!open) return;
     const h = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
   }, [open, onClose]);
-  if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 p-0 backdrop-blur-sm sm:items-center sm:p-4" onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} className={cn("animate-fade-in pb-safe max-h-[88dvh] w-full overflow-y-auto rounded-t-2xl border border-line-2 bg-panel sm:max-h-[92vh] sm:rounded-2xl", wide ? "sm:max-w-4xl" : "sm:max-w-2xl")}>
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-line bg-panel px-5 py-3">
-          <h3 className="text-base font-semibold">{title}</h3>
-          <button onClick={onClose} className="rounded-md p-1 text-ink-3 hover:bg-panel-2 hover:text-ink" aria-label="Close">
+  // lock background scrolling (incl. iOS) while any dialog is open
+  useEffect(() => {
+    if (!open) return;
+    openModals++;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      openModals--;
+      if (openModals === 0) document.body.style.overflow = prev === "hidden" ? "" : prev;
+    };
+  }, [open]);
+  if (!open || !mounted) return null;
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-end justify-center overscroll-contain bg-black/60 p-0 backdrop-blur-sm sm:items-center sm:p-4" onClick={onClose} role="dialog" aria-modal="true">
+      <div onClick={(e) => e.stopPropagation()} className={cn("animate-fade-in pb-safe max-h-[85dvh] w-full overflow-y-auto overscroll-contain rounded-t-2xl border border-line-2 bg-panel sm:max-h-[92vh] sm:rounded-2xl", wide ? "sm:max-w-4xl" : "sm:max-w-2xl")}>
+        <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-line bg-panel px-4 py-3 sm:px-5">
+          <h3 className="min-w-0 text-base font-semibold">{title}</h3>
+          <button onClick={onClose} className="-m-1 shrink-0 rounded-md p-2 text-ink-3 hover:bg-panel-2 hover:text-ink" aria-label="Close">
             <X className="h-5 w-5" />
           </button>
         </div>
         <div className="p-4 sm:p-5">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -233,8 +288,11 @@ export const inputCls = "h-9 w-full rounded-lg border border-line-2 bg-bg px-3 t
 export function NumInput({ value, onChange, step, min, max, className }: { value: number | null; onChange: (v: number) => void; step?: number; min?: number; max?: number; className?: string }) {
   const [txt, setTxt] = useState(value == null || !Number.isFinite(value) ? "" : String(value));
   useEffect(() => {
-    if (value == null || !Number.isFinite(value)) return;
-    if (Number(txt) !== value) setTxt(String(value));
+    if (value == null || !Number.isFinite(value)) {
+      setTxt("");
+      return;
+    }
+    if (txt === "" || Number(txt) !== value) setTxt(String(value));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
   return (
