@@ -9,6 +9,8 @@ interface Health {
   integrations: { ai: boolean; aiModel: string; privateSolanaRpc: boolean; birdeye: boolean; coinglass: boolean; jupiterKey: boolean; liveExecution: boolean };
 }
 
+const LIVE_CLIENT = process.env.NEXT_PUBLIC_ENABLE_LIVE_EXECUTION === "true";
+
 export default function SettingsPage() {
   const s = useStore((st) => st.settings);
   const code = useStore((st) => st.aiAccessCode);
@@ -106,7 +108,8 @@ export default function SettingsPage() {
                 ["Birdeye holders & trending (BIRDEYE_API_KEY)", h.data.integrations.birdeye, "Optional"],
                 ["CoinGlass liquidations (COINGLASS_API_KEY)", h.data.integrations.coinglass, "Optional"],
                 ["Jupiter API key (JUPITER_API_KEY)", h.data.integrations.jupiterKey, "Optional (higher limits)"],
-                ["Live execution", h.data.integrations.liveExecution, "Disabled by default — read-only"],
+                ["Live execution — server (ENABLE_LIVE_EXECUTION)", h.data.integrations.liveExecution, h.data.integrations.liveExecution ? "ON: unsigned swaps can be built for wallet approval" : "Off (default)"],
+                ["Live execution — browser (NEXT_PUBLIC_ENABLE_LIVE_EXECUTION)", LIVE_CLIENT, LIVE_CLIENT ? "ON in this build" : "Off in this build (needs a redeploy after changing)"],
               ].map(([label, on, note]) => (
                 <li key={label as string} className="flex items-start gap-2">
                   {on ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-bull" /> : <CircleDashed className="mt-0.5 h-4 w-4 shrink-0 text-ink-3" />}
@@ -114,6 +117,20 @@ export default function SettingsPage() {
                 </li>
               ))}
             </ul>
+          )}
+          {h.data && h.data.integrations.liveExecution !== LIVE_CLIENT && (
+            <div className="mt-3">
+              <Notice tone="warn">
+                Live execution is only half enabled. Set BOTH <code>ENABLE_LIVE_EXECUTION</code> and <code>NEXT_PUBLIC_ENABLE_LIVE_EXECUTION</code> to <code>true</code> (or both to false) in Netlify, then redeploy.
+              </Notice>
+            </div>
+          )}
+          {h.data?.integrations.liveExecution && LIVE_CLIENT && (
+            <div className="mt-3">
+              <Notice tone="bear">
+                Real-money buying is ON. Every swap still needs the checklist, typed CONFIRM, a simulation and approval in Phantom. Selling, stop-losses and tracking of real trades are not built yet — start with a few dollars.
+              </Notice>
+            </div>
           )}
         </Card>
         <Card title="Data" subtitle="Settings, paper account, notifications and leaderboard live in localStorage.">

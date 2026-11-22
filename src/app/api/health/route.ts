@@ -12,7 +12,8 @@ export async function GET() {
         birdeye: !!process.env.BIRDEYE_API_KEY,
         coinglass: !!process.env.COINGLASS_API_KEY,
         jupiterKey: !!process.env.JUPITER_API_KEY,
-        liveExecution: process.env.NEXT_PUBLIC_ENABLE_LIVE_EXECUTION === "true",
+        // server flag (builds swap transactions) — the browser flag is baked into the client bundle at build time
+        liveExecution: process.env.ENABLE_LIVE_EXECUTION === "true",
       },
       time: Date.now(),
     },
