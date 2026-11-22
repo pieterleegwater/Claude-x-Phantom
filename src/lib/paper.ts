@@ -37,6 +37,10 @@ export interface PaperPosition {
   breakevenAfterTp1: boolean;
   lastFundingAt: number;
   lastPrice: number;
+  /** ms epoch since which candle highs/lows may trigger stop/TP (open, TP hit or stop change) */
+  levelsSince: number;
+  /** fees/slippage model fixed at open, so exits are charged consistently */
+  cost?: CostModel;
 }
 
 export interface PaperFill {
@@ -142,6 +146,8 @@ export function openPosition(s: PaperState, o: OpenParams, marketPrice: number, 
     breakevenAfterTp1: o.breakevenAfterTp1 ?? true,
     lastFundingAt: now,
     lastPrice: marketPrice,
+    levelsSince: now,
+    cost,
   };
   return { state: { ...s, balance: s.balance - fee, positions: [...s.positions, pos] }, position: pos };
 }
@@ -152,6 +158,7 @@ export function closeQty(s: PaperState, posId: string, qty: number, rawPrice: nu
   if (!p) return { state: s };
   const q = Math.min(qty, p.qty);
   if (q <= 0) return { state: s };
+  cost = p.cost ?? cost;
   const slip = reason === "liquidation" ? 0 : cost.slippageBps / 10_000;
   const px = p.side === "long" ? rawPrice * (1 - slip) : rawPrice * (1 + slip);
   const fee = px * q * (cost.takerFeeBps / 10_000);
@@ -202,8 +209,10 @@ export function snapshot(s: PaperState, now = Date.now(), force = false): PaperS
 
 export interface PriceUpdate {
   price: number;
-  high?: number; // highest price observed since last update (e.g. from 1m candles)
+  high?: number; // highest price observed since last update (applied to every position)
   low?: number;
+  /** recent candles (time = open, unix s); only candles that START after a position's levelsSince are used */
+  candles?: { time: number; high: number; low: number }[];
   funding8h?: number | null;
 }
 
@@ -222,32 +231,41 @@ export function updatePrices(s: PaperState, prices: Record<string, PriceUpdate>,
     if (!u || !(u.price > 0)) continue;
     let p = state.positions.find((x) => x.id === p0.id);
     if (!p) continue;
-    const hi = Math.max(u.high ?? u.price, u.price);
-    const lo = Math.min(u.low ?? u.price, u.price);
-
-    // funding (perps only), charged continuously pro-rata
-    if (p.market === "BTC-PERP" && u.funding8h != null) {
-      const hours = (now - p.lastFundingAt) / 3_600_000;
-      if (hours > 0) {
+    // funding (perps only), charged pro-rata. Gaps (app closed / feed down) are capped at 1h so a
+    // reopened app does not charge days of funding at today's rate in one go.
+    if (p.market === "BTC-PERP") {
+      const hours = Math.min(1, Math.max(0, (now - p.lastFundingAt) / 3_600_000));
+      if (u.funding8h != null && hours > 0) {
         const f = p.qty * u.price * u.funding8h * (hours / 8) * (p.side === "long" ? 1 : -1);
-        p = { ...p, fundingPaid: p.fundingPaid + f, lastFundingAt: now };
-        state = { ...state, balance: state.balance - f, positions: state.positions.map((x) => (x.id === p!.id ? p! : x)) };
+        p = { ...p, fundingPaid: p.fundingPaid + f };
+        state = { ...state, balance: state.balance - f };
       }
+      p = { ...p, lastFundingAt: now };
     }
     p = { ...p, lastPrice: u.price };
     state = { ...state, positions: state.positions.map((x) => (x.id === p!.id ? p! : x)) };
 
+    const since = p.levelsSince ?? p.openedAt;
+    const valid = (u.candles ?? []).filter((k) => k.time * 1000 >= since);
+    const hi = Math.max(u.high ?? u.price, u.price, ...valid.map((k) => k.high));
+    const lo = Math.min(u.low ?? u.price, u.price, ...valid.map((k) => k.low));
     const adverse = p.side === "long" ? lo : hi;
     const favorable = p.side === "long" ? hi : lo;
+    // Stop first: a valid stop sits between entry and liquidation, so price must cross it before
+    // liquidation. If price has already gapped beyond the stop, fill at the (worse) current price.
+    if (p.side === "long" ? adverse <= p.stop : adverse >= p.stop) {
+      const fillAt = p.side === "long" ? Math.min(p.stop, u.price) : Math.max(p.stop, u.price);
+      const stopIsSafe = p.liqPrice == null || (p.side === "long" ? p.stop > p.liqPrice : p.stop < p.liqPrice);
+      if (stopIsSafe) {
+        const r = closeQty(state, p.id, p.qty, fillAt, "stop", cost, now);
+        state = r.state;
+        events.push({ type: "stop", title: `Stop-loss hit: ${p.asset} (paper)`, body: `Closed ${p.side} at ~${fillAt.toPrecision(6)}. PnL ${r.fill ? r.fill.pnl.toFixed(2) : "?"} USD.` });
+        continue;
+      }
+    }
     if (p.liqPrice != null && (p.side === "long" ? adverse <= p.liqPrice : adverse >= p.liqPrice)) {
       state = closeQty(state, p.id, p.qty, p.liqPrice, "liquidation", cost, now).state;
       events.push({ type: "liquidation", title: `${p.asset} position LIQUIDATED (paper)`, body: `Price reached the estimated liquidation level ${p.liqPrice.toFixed(2)}. Margin lost.` });
-      continue;
-    }
-    if (p.side === "long" ? adverse <= p.stop : adverse >= p.stop) {
-      const r = closeQty(state, p.id, p.qty, p.stop, "stop", cost, now);
-      state = r.state;
-      events.push({ type: "stop", title: `Stop-loss hit: ${p.asset} (paper)`, body: `Closed ${p.side} at ~${p.stop.toPrecision(6)}. PnL ${r.fill ? r.fill.pnl.toFixed(2) : "?"} USD.` });
       continue;
     }
     for (let k = 0; k < p.takeProfits.length; k++) {
@@ -258,14 +276,15 @@ export function updatePrices(s: PaperState, prices: Record<string, PriceUpdate>,
       const reached = cur.side === "long" ? favorable >= tp.price : favorable <= tp.price;
       if (!reached) break;
       const isLast = cur.takeProfits.slice(k + 1).every((t) => t.hit) || k === cur.takeProfits.length - 1;
-      const qty = isLast ? cur.qty : Math.min(cur.qty, (cur.initialQty * tp.closePct) / 100);
+      const coversAll = cur.takeProfits.reduce((t, x) => t + x.closePct, 0) >= 99;
+      const qty = isLast && coversAll ? cur.qty : Math.min(cur.qty, (cur.initialQty * tp.closePct) / 100);
       const r = closeQty(state, cur.id, qty, tp.price, (["tp1", "tp2", "tp3"][k] ?? "tp3") as PaperFill["reason"], cost, now);
       state = r.state;
       events.push({ type: "tp", title: `Take-profit ${k + 1} hit: ${cur.asset} (paper)`, body: `Closed ${qty.toPrecision(4)} at ~${tp.price.toPrecision(6)}. PnL ${r.fill ? r.fill.pnl.toFixed(2) : "?"} USD.` });
       state = {
         ...state,
         positions: state.positions.map((x) =>
-          x.id === cur.id ? { ...x, takeProfits: x.takeProfits.map((t, j) => (j === k ? { ...t, hit: true } : t)), stop: k === 0 && x.breakevenAfterTp1 ? x.entry : x.stop } : x,
+          x.id === cur.id ? { ...x, takeProfits: x.takeProfits.map((t, j) => (j === k ? { ...t, hit: true } : t)), stop: k === 0 && x.breakevenAfterTp1 ? x.entry : x.stop, levelsSince: now } : x,
         ),
       };
     }
@@ -292,8 +311,9 @@ export function stats(s: PaperState, now = Date.now()): PaperStats {
   const eq = equity(s);
   const dayStart = new Date(now);
   dayStart.setHours(0, 0, 0, 0);
-  const todayRealized = s.fills.filter((f) => f.closedAt >= dayStart.getTime()).reduce((t, f) => t + f.pnl, 0);
-  const todayUnreal = s.positions.reduce((t, p) => t + unrealized(p), 0);
+  // equity at the last snapshot before local midnight (or the starting balance for a new account)
+  const before = s.equityHistory.filter((h) => h.t < dayStart.getTime());
+  const dayStartEquity = before.length ? before[before.length - 1].equity : (s.equityHistory[0]?.equity ?? s.startingBalance);
   const cp = s.closedPositions;
   const wins = cp.filter((c) => c.pnl > 0);
   const gw = wins.reduce((t, c) => t + c.pnl, 0);
@@ -315,7 +335,7 @@ export function stats(s: PaperState, now = Date.now()): PaperStats {
     equity: eq,
     totalPnl: eq - s.startingBalance,
     totalPnlPct: ((eq - s.startingBalance) / s.startingBalance) * 100,
-    todayPnl: todayRealized + todayUnreal,
+    todayPnl: eq - dayStartEquity,
     winRate: cp.length ? wins.length / cp.length : null,
     profitFactor: gl > 0 ? gw / gl : cp.length ? (gw > 0 ? Infinity : null) : null,
     maxDrawdownPct: dd * 100,
@@ -323,6 +343,39 @@ export function stats(s: PaperState, now = Date.now()): PaperStats {
     avgR: cp.length ? cp.reduce((t, c) => t + c.r, 0) / cp.length : null,
     bySetup,
     feesPaid: s.fills.reduce((t, f) => t + f.fees, 0),
-    fundingPaid: s.fills.reduce((t, f) => t + f.funding, 0) + s.positions.reduce((t, p) => t + p.fundingPaid, 0),
+    fundingPaid: s.fills.reduce((t, f) => t + f.funding, 0) + s.positions.reduce((t, p) => t + (p.fundingPaid - (p.fundingReported ?? 0)), 0),
   };
+}
+
+/** Fill fields added in later versions so older saved data never produces NaN. */
+export function migratePaper(raw: unknown, fallbackBalance: number): PaperState {
+  const base = newPaperState(fallbackBalance);
+  if (!raw || typeof raw !== "object") return base;
+  const r = raw as Partial<PaperState>;
+  const num = (x: unknown, d: number) => (typeof x === "number" && Number.isFinite(x) ? x : d);
+  return {
+    startingBalance: num(r.startingBalance, base.startingBalance),
+    balance: num(r.balance, base.balance),
+    fills: Array.isArray(r.fills) ? r.fills : [],
+    closedPositions: Array.isArray(r.closedPositions) ? r.closedPositions : [],
+    equityHistory: Array.isArray(r.equityHistory) && r.equityHistory.length ? r.equityHistory : base.equityHistory,
+    positions: (Array.isArray(r.positions) ? r.positions : []).map((p) => ({
+      ...p,
+      entryFee: num(p.entryFee, 0),
+      feesPaid: num(p.feesPaid, 0),
+      fundingPaid: num(p.fundingPaid, 0),
+      fundingReported: num(p.fundingReported, 0),
+      realizedPnl: num(p.realizedPnl, 0),
+      breakevenAfterTp1: p.breakevenAfterTp1 ?? true,
+      lastFundingAt: num(p.lastFundingAt, Date.now()),
+      lastPrice: num(p.lastPrice, p.entry),
+      levelsSince: num(p.levelsSince, Date.now()),
+      takeProfits: Array.isArray(p.takeProfits) ? p.takeProfits : [],
+    })),
+  };
+}
+
+/** Manually move the stop to entry. Only allowed while the trade is in profit. */
+export function moveStopToBreakeven(s: PaperState, id: string, now = Date.now()): PaperState {
+  return { ...s, positions: s.positions.map((p) => (p.id === id && unrealized(p) > 0 ? { ...p, stop: p.entry, levelsSince: now } : p)) };
 }

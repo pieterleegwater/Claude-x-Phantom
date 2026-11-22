@@ -3,7 +3,7 @@
 // localStorage — no secrets, no private keys. Export/import is available in Settings.
 import { useSyncExternalStore } from "react";
 import { DEFAULT_SETTINGS, type Settings } from "../settings";
-import { newPaperState, type PaperState } from "../paper";
+import { newPaperState, migratePaper, type PaperState } from "../paper";
 import type { TradeSignal } from "../types";
 
 export interface AppNotification {
@@ -113,10 +113,49 @@ export function hydrate() {
     ...base,
     ...loaded,
     settings: { ...base.settings, ...(loaded.settings ?? {}), notifications: { ...base.settings.notifications, ...(loaded.settings?.notifications ?? {}) } },
-    paper: loaded.paper ?? base.paper,
+    paper: migratePaper(loaded.paper, base.settings.accountEquity),
     hydrated: true,
   };
   listeners.forEach((l) => l());
+  // keep multiple tabs in sync: another tab saved → reload our copy
+  window.addEventListener("storage", (e) => {
+    if (e.key !== KEY || !e.newValue) return;
+    try {
+      const other = JSON.parse(e.newValue) as Partial<AppState>;
+      state = mergeLoaded(other);
+      listeners.forEach((l) => l());
+    } catch {
+      /* ignore */
+    }
+  });
+}
+
+function mergeLoaded(loaded: Partial<AppState>): AppState {
+  const base = initial();
+  return {
+    ...base,
+    ...loaded,
+    settings: { ...base.settings, ...(loaded.settings ?? {}), notifications: { ...base.settings.notifications, ...(loaded.settings?.notifications ?? {}) } },
+    paper: migratePaper(loaded.paper, base.settings.accountEquity),
+    hydrated: true,
+  };
+}
+
+const TAB_ID = Math.random().toString(36).slice(2);
+const LEADER_KEY = "edgepilot:leader";
+/** Simple leader election so only one tab runs the paper-fill simulation. */
+export function isLeaderTab(): boolean {
+  try {
+    const now = Date.now();
+    const cur = JSON.parse(localStorage.getItem(LEADER_KEY) || "null") as { id: string; t: number } | null;
+    if (!cur || cur.id === TAB_ID || now - cur.t > 25_000) {
+      localStorage.setItem(LEADER_KEY, JSON.stringify({ id: TAB_ID, t: now }));
+      return true;
+    }
+    return false;
+  } catch {
+    return true;
+  }
 }
 
 export function exportData() {
@@ -128,7 +167,7 @@ export function exportData() {
 export function importData(json: string) {
   const parsed = JSON.parse(json) as Partial<AppState>;
   if (typeof parsed !== "object" || !parsed) throw new Error("Invalid file");
-  state = { ...initial(), ...parsed, hydrated: true };
+  state = mergeLoaded(parsed);
   listeners.forEach((l) => l());
   persist();
 }

@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { FlaskConical, RotateCcw } from "lucide-react";
 import { setState, useStore, getState, notify } from "@/lib/client/store";
 import { useApi } from "@/lib/client/useApi";
-import { available, closeQty, equity, newPaperState, openPosition, stats, unrealized, type PaperMarket } from "@/lib/paper";
+import { available, closeQty, equity, moveStopToBreakeven, newPaperState, openPosition, stats, unrealized, type PaperMarket } from "@/lib/paper";
 import { planPosition } from "@/lib/risk";
 import type { Ticker } from "@/lib/types";
 import { Badge, Button, Card, Field, Modal, NumInput, Notice, PageHeader, Segmented, Stat, Term, cn, inputCls, pct, price, usd, timeAgo } from "@/components/ui";
@@ -15,6 +15,10 @@ export default function PaperPage() {
   const st = stats(paper);
   const [resetOpen, setResetOpen] = useState(false);
   const [resetBal, setResetBal] = useState(settings.accountEquity);
+  const hydrated = useStore((s) => s.hydrated);
+  useEffect(() => {
+    if (hydrated) setResetBal(getState().settings.accountEquity);
+  }, [hydrated]);
   const cost = { takerFeeBps: settings.takerFeeBps, slippageBps: settings.slippageBps, mmr: settings.maintenanceMarginRate };
   const marginUsed = paper.positions.reduce((t, p) => t + p.margin, 0);
   const riskAtStop = paper.positions.reduce((t, p) => t + Math.max(0, (p.side === "long" ? p.entry - p.stop : p.stop - p.entry) * p.qty), 0);
@@ -27,7 +31,7 @@ export default function PaperPage() {
     setState({ paper: r.state });
     if (r.fill) notify({ key: `manual-${r.fill.id}`, type: "info", title: `Closed ${(frac * 100).toFixed(0)}% of ${p.asset} (paper)`, body: `Simulated fill at ~${price(r.fill.exit)}. Net ${usd(r.fill.pnl)}.`, href: "/paper" });
   };
-  const moveBE = (id: string) => setState((s) => ({ paper: { ...s.paper, positions: s.paper.positions.map((p) => (p.id === id ? { ...p, stop: p.entry } : p)) } }));
+  const moveBE = (id: string) => setState((s) => ({ paper: moveStopToBreakeven(s.paper, id) }));
 
   return (
     <div>
@@ -88,7 +92,7 @@ export default function PaperPage() {
                       <div className="mt-3 grid grid-cols-4 gap-1.5">
                         <Button size="sm" onClick={() => closePart(p.id, 0.25)}>25%</Button>
                         <Button size="sm" onClick={() => closePart(p.id, 0.5)}>50%</Button>
-                        <Button size="sm" variant="ghost" disabled={p.stop === p.entry} onClick={() => moveBE(p.id)}>BE</Button>
+                        <Button size="sm" variant="ghost" disabled={p.stop === p.entry || u <= 0} onClick={() => moveBE(p.id)} title="Move stop to entry (only when in profit)">BE</Button>
                         <Button size="sm" variant="danger" onClick={() => closePart(p.id, 1)}>Close</Button>
                       </div>
                     </div>
@@ -135,7 +139,7 @@ export default function PaperPage() {
                               <Button size="sm" onClick={() => closePart(p.id, 0.25)}>25%</Button>
                               <Button size="sm" onClick={() => closePart(p.id, 0.5)}>50%</Button>
                               <Button size="sm" variant="danger" onClick={() => closePart(p.id, 1)}>Close</Button>
-                              {p.stop !== p.entry && <Button size="sm" variant="ghost" onClick={() => moveBE(p.id)} title="Move stop to entry">BE</Button>}
+                              {p.stop !== p.entry && u > 0 && <Button size="sm" variant="ghost" onClick={() => moveBE(p.id)} title="Move stop to entry">BE</Button>}
                             </div>
                           </td>
                         </tr>
@@ -189,6 +193,10 @@ function Ticket() {
   const [stop, setStop] = useState<number | null>(null);
   const [tps, setTps] = useState<{ price: number | null; closePct: number }[]>([{ price: null, closePct: 50 }, { price: null, closePct: 50 }]);
   const [lev, setLev] = useState(settings.defaultLeverage);
+  const hydrated = useStore((s) => s.hydrated);
+  useEffect(() => {
+    if (hydrated && !getState().ticket) setLev(getState().settings.defaultLeverage);
+  }, [hydrated]);
   const [qty, setQty] = useState<number | null>(null);
   const [setup, setSetup] = useState("Manual");
   const [signalId, setSignalId] = useState<string>();

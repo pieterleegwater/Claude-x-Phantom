@@ -6,7 +6,7 @@
 // There is no server-side push in this version — alerts only fire while a tab is open.
 import { useEffect, useRef } from "react";
 import { apiGet } from "@/lib/client/useApi";
-import { getState, setState, notify, logSignal, useStore } from "@/lib/client/store";
+import { getState, setState, notify, logSignal, useStore, isLeaderTab } from "@/lib/client/store";
 import { updatePrices, type PriceUpdate } from "@/lib/paper";
 import { analyzeBtc } from "@/lib/analysis/btcEngine";
 import { analyzeMeme, type MemeToken } from "@/lib/analysis/memeEngine";
@@ -16,7 +16,6 @@ import { HIGHER_TF } from "@/lib/client/hooks";
 
 export function Watcher() {
   const hydrated = useStore((s) => s.hydrated);
-  const lastPaperCheck = useRef(Date.now());
   const funding = useRef<{ v: number | null; t: number }>({ v: null, t: 0 });
   const busy = useRef({ paper: false, market: false });
 
@@ -25,15 +24,13 @@ export function Watcher() {
     if (!hydrated) return;
     const tick = async () => {
       const s = getState();
-      if (!s.paper.positions.length || busy.current.paper) return;
+      // only one browser tab simulates fills, otherwise tabs would double-process positions
+      if (!s.paper.positions.length || busy.current.paper || !isLeaderTab()) return;
       busy.current.paper = true;
       try {
         const prices: Record<string, PriceUpdate> = {};
-        const since = lastPaperCheck.current;
         if (s.paper.positions.some((p) => p.priceKey === "BTC")) {
           const [t, c] = await Promise.all([apiGet<Ticker>("/api/market/ticker?symbol=BTC"), apiGet<Candle[]>("/api/market/candles?symbol=BTC&tf=1m&limit=50")]);
-          const recent = c.data.filter((k) => (k.time + 60) * 1000 >= since);
-          const highs = recent.map((k) => k.high), lows = recent.map((k) => k.low);
           if (Date.now() - funding.current.t > 5 * 60_000) {
             try {
               const d = await apiGet<DerivativesSnapshot>("/api/btc/derivatives");
@@ -42,7 +39,8 @@ export function Watcher() {
               funding.current = { v: funding.current.v, t: Date.now() };
             }
           }
-          prices.BTC = { price: t.data.price, high: highs.length ? Math.max(...highs) : undefined, low: lows.length ? Math.min(...lows) : undefined, funding8h: funding.current.v };
+          // candles are filtered per position (only those starting after the position opened / levels changed)
+          prices.BTC = { price: t.data.price, candles: c.data.slice(-30), funding8h: funding.current.v };
         }
         const mints = [...new Set(s.paper.positions.filter((p) => p.market === "SOL-MEME").map((p) => p.priceKey))];
         if (mints.length) {
@@ -52,7 +50,6 @@ export function Watcher() {
         const st = getState();
         const cost = { takerFeeBps: st.settings.takerFeeBps, slippageBps: st.settings.slippageBps, mmr: st.settings.maintenanceMarginRate };
         const res = updatePrices(st.paper, prices, cost);
-        lastPaperCheck.current = Date.now();
         setState({ paper: res.state });
         if (st.settings.notifications.paperFills)
           for (const e of res.events) notify({ key: `${e.title}-${Date.now()}`, type: e.type === "tp" ? "tp" : "stop", title: e.title, body: e.body, href: "/paper" });
