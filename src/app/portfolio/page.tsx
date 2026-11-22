@@ -58,7 +58,7 @@ export default function PortfolioPage() {
         </Card>
       </div>
 
-      <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="mt-3 grid grid-cols-2 gap-3 sm:mt-4 sm:gap-4 xl:grid-cols-5">
         <Card><Stat label="Paper equity" value={usd(eq)} sub={pct(st.totalPnlPct)} /></Card>
         <Card><Stat label="Gross exposure" value={usd(totalNotional, 0)} sub={`net ${usd(netNotional, 0)}`} /></Card>
         <Card><Stat label={<Term k="leverage">Effective leverage</Term>} value={`${effLev.toFixed(2)}x`} tone={effLev > settings.maxLeverage ? "bear" : undefined} /></Card>

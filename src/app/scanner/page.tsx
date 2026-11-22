@@ -49,9 +49,9 @@ export default function ScannerPage() {
           </>
         }
       />
-      <div className="mb-4 flex flex-wrap items-center gap-2">
+      <div className="no-scrollbar -mx-3 mb-3 flex items-center gap-2 overflow-x-auto px-3 sm:mx-0 sm:mb-4 sm:flex-wrap sm:px-0">
         {CATS.map((c) => (
-          <button key={c} onClick={() => setCat(c)} className={cn("rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors", cat === c ? "border-accent/60 bg-accent/10 text-ink" : "border-line-2 text-ink-3 hover:text-ink")}>
+          <button key={c} onClick={() => setCat(c)} className={cn("shrink-0 whitespace-nowrap rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors", cat === c ? "border-accent/60 bg-accent/10 text-ink" : "border-line-2 text-ink-3 hover:text-ink")}>
             {c} <span className="num text-ink-3">{counts[c] ?? 0}</span>
           </button>
         ))}
@@ -66,8 +66,7 @@ export default function ScannerPage() {
             Analyse this mint
           </Button>
         )}
-        <span className="text-xs text-ink-3">Sort</span>
-        <Segmented size="sm" value={sort} onChange={setSort} options={[{ value: "score", label: "Score" }, { value: "liq", label: "Liquidity" }, { value: "vol", label: "1h volume" }, { value: "h1", label: "1h change" }]} />
+                <Segmented size="sm" value={sort} onChange={setSort} options={[{ value: "score", label: "Score" }, { value: "liq", label: "Liquidity" }, { value: "vol", label: "1h volume" }, { value: "h1", label: "1h change" }]} />
       </div>
 
       {scan.error ? (
@@ -77,7 +76,50 @@ export default function ScannerPage() {
       ) : rows.length === 0 ? (
         <Empty>No tokens in this category right now.</Empty>
       ) : (
-        <Card pad={false}>
+        <>
+        {/* Phones: compact cards */}
+        <div className="space-y-2 md:hidden">
+          {rows.map((a) => {
+            const t = a.token;
+            const accel = t.volume.h6 > 0 ? t.volume.h1 / (t.volume.h6 / 6) : 0;
+            return (
+              <div key={t.mint} className="rounded-xl border border-line bg-panel p-3">
+                <div className="flex items-center gap-2.5">
+                  <button onClick={() => toggleWatch(t.mint)} aria-label="Watchlist" className="-m-1 p-1">
+                    <Star className={cn("h-4 w-4", watchlist.includes(t.mint) ? "fill-warn text-warn" : "text-ink-3")} />
+                  </button>
+                  <Link href={`/scanner/${t.mint}`} className="flex min-w-0 flex-1 items-center gap-2">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    {t.imageUrl ? <img src={t.imageUrl} alt="" className="h-8 w-8 shrink-0 rounded-full" /> : <span className="h-8 w-8 shrink-0 rounded-full bg-panel-2" />}
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-semibold text-ink">{t.symbol}</span>
+                      <span className="block truncate text-[11px] text-ink-3">{t.name}</span>
+                    </span>
+                  </Link>
+                  <div className="text-right">
+                    <div className="num text-lg font-semibold leading-none">{a.score}</div>
+                    <div className="text-[10px] text-ink-3">score</div>
+                  </div>
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <Badge tone={catTone(a.category)}>{a.category}</Badge>
+                  <span className={cn("num text-xs", t.priceChange.h1 >= 0 ? "text-bull" : "text-bear")}>{pct(t.priceChange.h1, 1)} 1h</span>
+                  <span className={cn("num text-xs", t.priceChange.h24 >= 0 ? "text-bull" : "text-bear")}>{pct(t.priceChange.h24, 0)} 24h</span>
+                </div>
+                <div className="num mt-2 grid grid-cols-4 gap-2 text-[11px]">
+                  <div><div className="text-ink-3">Liq</div>${compact(t.liquidityUsd)}</div>
+                  <div><div className="text-ink-3">Mcap</div>${compact(t.marketCap ?? t.fdv)}</div>
+                  <div><div className="text-ink-3">Vol 1h</div>${compact(t.volume.h1)}</div>
+                  <div><div className="text-ink-3">Accel</div><span className={accel >= 2 ? "text-bull" : ""}>{accel.toFixed(1)}×</span></div>
+                </div>
+                <p className="mt-2 line-clamp-2 text-[11px] leading-snug">
+                  {a.critical[0] ? <span className="text-bear">{a.critical[0]}</span> : a.warnings[0] ? <span className="text-warn">{a.warnings[0]}</span> : <span className="text-ink-3">{a.reasons[0] ?? "—"}</span>}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+        <Card pad={false} className="hidden md:block">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[900px] text-xs">
               <thead className="border-b border-line bg-panel-2 text-left text-ink-3">
@@ -146,6 +188,7 @@ export default function ScannerPage() {
             </table>
           </div>
         </Card>
+        </>
       )}
       <div className="mt-4">
         <Notice tone="warn">

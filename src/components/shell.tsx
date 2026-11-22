@@ -2,7 +2,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Radar, Coins, Bitcoin, FlaskConical, Gamepad2, ShieldHalf, History, Settings as Cog, Bell, GraduationCap, Menu, X, CheckCheck } from "lucide-react";
+import { LayoutDashboard, Radar, Coins, Bitcoin, FlaskConical, Gamepad2, ShieldHalf, History, Settings as Cog, Bell, GraduationCap, Menu, X, CheckCheck, MoreHorizontal } from "lucide-react";
 import { hydrate, setState, useStore } from "@/lib/client/store";
 import { useTicker } from "@/lib/client/hooks";
 import { SolanaProviders, WalletButton } from "./wallet";
@@ -51,6 +51,39 @@ function NavLinks({ onClick }: { onClick?: () => void }) {
           </Link>
         );
       })}
+    </nav>
+  );
+}
+
+const TABS = [
+  { href: "/", label: "Overview", icon: LayoutDashboard },
+  { href: "/signals", label: "Signals", icon: Radar },
+  { href: "/scanner", label: "Scanner", icon: Coins },
+  { href: "/bitcoin", label: "BTC", icon: Bitcoin },
+  { href: "/paper", label: "Paper", icon: Gamepad2 },
+];
+
+/** Bottom tab bar for phones (thumb-reachable), with a "More" sheet for the remaining pages. */
+function MobileTabBar({ onMore }: { onMore: () => void }) {
+  const path = usePathname();
+  const inTabs = TABS.some((t) => (t.href === "/" ? path === "/" : path.startsWith(t.href)));
+  return (
+    <nav className="pb-safe fixed inset-x-0 bottom-0 z-50 border-t border-line bg-[#0d1014]/95 backdrop-blur lg:hidden" aria-label="Main">
+      <div className="grid grid-cols-6">
+        {TABS.map(({ href, label, icon: Icon }) => {
+          const active = href === "/" ? path === "/" : path.startsWith(href);
+          return (
+            <Link key={href} href={href} className={cn("flex flex-col items-center gap-0.5 py-2 text-[10px] font-medium", active ? "text-accent" : "text-ink-3")}>
+              <Icon className="h-5 w-5" />
+              {label}
+            </Link>
+          );
+        })}
+        <button onClick={onMore} className={cn("flex flex-col items-center gap-0.5 py-2 text-[10px] font-medium", !inTabs ? "text-accent" : "text-ink-3")}>
+          <MoreHorizontal className="h-5 w-5" />
+          More
+        </button>
+      </div>
     </nav>
   );
 }
@@ -156,7 +189,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </aside>
         {mobileOpen && (
           <div className="fixed inset-0 z-[90] bg-black/60 lg:hidden" onClick={() => setMobileOpen(false)}>
-            <div className="h-full w-72 border-r border-line bg-panel p-4" onClick={(e) => e.stopPropagation()}>
+            <div className="h-full w-72 max-w-[85vw] overflow-y-auto border-r border-line bg-panel p-4" style={{ paddingTop: "max(1rem, env(safe-area-inset-top))" }} onClick={(e) => e.stopPropagation()}>
               <div className="mb-5 flex items-center justify-between">
                 <Logo />
                 <button onClick={() => setMobileOpen(false)} className="p-1 text-ink-3" aria-label="Close menu">
@@ -164,11 +197,15 @@ export function AppShell({ children }: { children: ReactNode }) {
                 </button>
               </div>
               <NavLinks onClick={() => setMobileOpen(false)} />
+              <div className="mt-6 border-t border-line pt-4">
+                <Toggle checked={beginner} onChange={(v) => setState((s) => ({ settings: { ...s.settings, beginnerMode: v } }))} label={<span className="text-sm">Beginner mode</span>} />
+              </div>
+              <p className="mt-6 text-[10px] leading-relaxed text-ink-3">Paper trading &amp; analysis only. Not financial advice. Crypto trading can lose all capital.</p>
             </div>
           </div>
         )}
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="sticky top-0 z-40 flex h-14 items-center gap-3 border-b border-line bg-bg/85 px-4 backdrop-blur">
+          <header className="sticky top-0 z-40 flex h-14 items-center gap-2 border-b border-line bg-bg/85 px-3 backdrop-blur sm:gap-3 sm:px-4" style={{ paddingTop: "env(safe-area-inset-top)", height: "calc(3.5rem + env(safe-area-inset-top))" }}>
             <button className="rounded-lg p-1.5 text-ink-2 lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Open menu">
               <Menu className="h-5 w-5" />
             </button>
@@ -182,9 +219,10 @@ export function AppShell({ children }: { children: ReactNode }) {
               <WalletButton />
             </div>
           </header>
-          <main className="mx-auto w-full max-w-[1400px] flex-1 px-4 py-5 sm:px-6">{children}</main>
+          <main className="mx-auto w-full max-w-[1400px] flex-1 px-3 pb-24 pt-4 sm:px-6 sm:py-5 lg:pb-5">{children}</main>
         </div>
       </div>
+      <MobileTabBar onMore={() => setMobileOpen(true)} />
       <Watcher />
     </SolanaProviders>
   );

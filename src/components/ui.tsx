@@ -13,7 +13,7 @@ export function Card({ children, className, title, subtitle, right, pad = true }
   return (
     <section className={cn("rounded-xl border border-line bg-panel animate-fade-in", className)}>
       {(title || right) && (
-        <header className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2 border-b border-line px-4 py-3">
+        <header className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2 border-b border-line px-3 py-3 sm:px-4">
           <div className="min-w-0">
             {title && <h2 className="text-sm font-semibold tracking-tight text-ink">{title}</h2>}
             {subtitle && <p className="mt-0.5 text-xs text-ink-3">{subtitle}</p>}
@@ -21,7 +21,7 @@ export function Card({ children, className, title, subtitle, right, pad = true }
           {right && <div className="flex min-w-0 max-w-full items-center gap-2">{right}</div>}
         </header>
       )}
-      <div className={pad ? "p-4" : ""}>{children}</div>
+      <div className={pad ? "p-3 sm:p-4" : ""}>{children}</div>
     </section>
   );
 }
@@ -70,7 +70,7 @@ export function Stat({ label, value, sub, tone, hint }: { label: ReactNode; valu
   return (
     <div className="min-w-0" title={hint}>
       <div className="text-[11px] font-medium uppercase tracking-wider text-ink-3">{label}</div>
-      <div className={cn("num mt-1 truncate text-lg font-semibold", tone === "bull" && "text-bull", tone === "bear" && "text-bear", tone === "warn" && "text-warn")}>{value}</div>
+      <div className={cn("num mt-1 truncate text-base font-semibold sm:text-lg", tone === "bull" && "text-bull", tone === "bear" && "text-bear", tone === "warn" && "text-warn")}>{value}</div>
       {sub && <div className="mt-0.5 truncate text-xs text-ink-3">{sub}</div>}
     </div>
   );
@@ -122,10 +122,10 @@ export function ScoreBar({ score, className }: { score: number | null; className
   );
 }
 
-export function ScoreRing({ score, size = 56, label }: { score: number; size?: number; label?: string }) {
+export function ScoreRing({ score, size = 56, label, muted }: { score: number; size?: number; label?: string; muted?: boolean }) {
   const r = size / 2 - 5;
   const c = 2 * Math.PI * r;
-  const color = score >= 70 ? "var(--color-bull)" : score >= 50 ? "var(--color-warn)" : "var(--color-bear)";
+  const color = muted ? "var(--color-ink-3)" : score >= 70 ? "var(--color-bull)" : score >= 50 ? "var(--color-warn)" : "var(--color-bear)";
   return (
     <div className="relative shrink-0" style={{ width: size, height: size }} title={label ?? "Quality score (rule-based, not a probability)"}>
       <svg width={size} height={size} className="-rotate-90">
@@ -205,14 +205,14 @@ export function Modal({ open, onClose, title, children, wide }: { open: boolean;
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 p-0 backdrop-blur-sm sm:items-center sm:p-4" onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} className={cn("animate-fade-in max-h-[92vh] w-full overflow-y-auto rounded-t-2xl border border-line-2 bg-panel sm:rounded-2xl", wide ? "sm:max-w-4xl" : "sm:max-w-2xl")}>
+      <div onClick={(e) => e.stopPropagation()} className={cn("animate-fade-in pb-safe max-h-[88dvh] w-full overflow-y-auto rounded-t-2xl border border-line-2 bg-panel sm:max-h-[92vh] sm:rounded-2xl", wide ? "sm:max-w-4xl" : "sm:max-w-2xl")}>
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-line bg-panel px-5 py-3">
           <h3 className="text-base font-semibold">{title}</h3>
           <button onClick={onClose} className="rounded-md p-1 text-ink-3 hover:bg-panel-2 hover:text-ink" aria-label="Close">
             <X className="h-5 w-5" />
           </button>
         </div>
-        <div className="p-5">{children}</div>
+        <div className="p-4 sm:p-5">{children}</div>
       </div>
     </div>
   );
@@ -295,7 +295,7 @@ export function PageHeader({ title, subtitle, right, beginner }: { title: string
     <div className="mb-5 space-y-3">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">{title}</h1>
+          <h1 className="text-lg font-semibold tracking-tight sm:text-2xl">{title}</h1>
           {subtitle && <p className="mt-1 text-sm text-ink-3">{subtitle}</p>}
         </div>
         {right && <div className="flex flex-wrap items-center gap-2">{right}</div>}

@@ -72,7 +72,13 @@ export default function BitcoinPage() {
         }
       />
 
-      <div className="grid gap-4 xl:grid-cols-[1fr_400px]">
+      {/* Phones/tablets: decision first, then leverage, then the chart */}
+      <div className="mb-3 space-y-3 xl:hidden">
+        {a.error ? <ErrorBox title="Analysis unavailable" message={a.error} onRetry={a.refresh} /> : sig ? <SignalCard s={sig} /> : <Skeleton className="h-80" />}
+        {market === "BTC-PERP" && <LeverageSelector leverage={leverage} setLeverage={setLeverage} max={settings.maxLeverage} />}
+      </div>
+
+      <div className="grid gap-3 sm:gap-4 xl:grid-cols-[1fr_400px]">
         <div className="min-w-0 space-y-4">
           <Card
             pad={false}
@@ -111,8 +117,10 @@ export default function BitcoinPage() {
         </div>
 
         <div className="min-w-0 space-y-4">
-          {market === "BTC-PERP" && <LeverageSelector leverage={leverage} setLeverage={setLeverage} max={settings.maxLeverage} />}
-          {a.error ? <ErrorBox title="Analysis unavailable" message={a.error} onRetry={a.refresh} /> : sig ? <SignalCard s={sig} /> : <Skeleton className="h-80" />}
+          <div className="hidden space-y-4 xl:block">
+            {market === "BTC-PERP" && <LeverageSelector leverage={leverage} setLeverage={setLeverage} max={settings.maxLeverage} />}
+            {a.error ? <ErrorBox title="Analysis unavailable" message={a.error} onRetry={a.refresh} /> : sig ? <SignalCard s={sig} /> : <Skeleton className="h-80" />}
+          </div>
           <RiskCalculator defaultPrice={(a.analysis?.snapshot.close as number) ?? null} leverage={market === "BTC-PERP" ? leverage : 1} perp={market === "BTC-PERP"} />
           {a.analysis && <LiqZones a={a} />}
         </div>
@@ -301,8 +309,8 @@ function StrategyStatus({ a }: { a: A }) {
               <th className="px-2 py-1.5 font-medium">Strategy</th>
               <th className="px-2 py-1.5 font-medium">Now</th>
               <th className="px-2 py-1.5 text-right font-medium">Trades</th>
-              <th className="px-2 py-1.5 text-right font-medium">Win</th>
-              <th className="px-2 py-1.5 text-right font-medium">PF</th>
+              <th className="hidden px-2 py-1.5 text-right font-medium sm:table-cell">Win</th>
+              <th className="hidden px-2 py-1.5 text-right font-medium sm:table-cell">PF</th>
               <th className="px-2 py-1.5 text-right font-medium">Exp.</th>
             </tr>
           </thead>
@@ -322,8 +330,8 @@ function StrategyStatus({ a }: { a: A }) {
                   )}
                 </td>
                 <td className="num px-2 py-2 text-right">{s.metrics.trades}</td>
-                <td className="num px-2 py-2 text-right">{s.metrics.winRate == null ? "—" : `${(s.metrics.winRate * 100).toFixed(0)}%`}</td>
-                <td className="num px-2 py-2 text-right">{s.metrics.profitFactor == null ? "—" : Number.isFinite(s.metrics.profitFactor) ? s.metrics.profitFactor.toFixed(2) : "∞"}</td>
+                <td className="num hidden px-2 py-2 text-right sm:table-cell">{s.metrics.winRate == null ? "—" : `${(s.metrics.winRate * 100).toFixed(0)}%`}</td>
+                <td className="num hidden px-2 py-2 text-right sm:table-cell">{s.metrics.profitFactor == null ? "—" : Number.isFinite(s.metrics.profitFactor) ? s.metrics.profitFactor.toFixed(2) : "∞"}</td>
                 <td className={cn("num px-2 py-2 text-right", (s.metrics.expectancyR ?? 0) > 0 ? "text-bull" : "text-bear")}>{s.metrics.expectancyR == null ? "—" : `${s.metrics.expectancyR.toFixed(2)}R`}</td>
               </tr>
             ))}

@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   createChart,
   CandlestickSeries,
@@ -46,7 +46,21 @@ export interface MarkerDef {
   text?: string;
 }
 
-export function CandleChart({ candles, overlays = [], priceLines = [], markers = [], height = 420, showVolume = true }: { candles: Candle[]; overlays?: Overlay[]; priceLines?: PriceLineDef[]; markers?: MarkerDef[]; height?: number; showVolume?: boolean }) {
+function useIsPhone() {
+  const [phone, setPhone] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 640px)");
+    const f = () => setPhone(mq.matches);
+    f();
+    mq.addEventListener("change", f);
+    return () => mq.removeEventListener("change", f);
+  }, []);
+  return phone;
+}
+
+export function CandleChart({ candles, overlays = [], priceLines = [], markers = [], height: desktopHeight = 420, showVolume = true }: { candles: Candle[]; overlays?: Overlay[]; priceLines?: PriceLineDef[]; markers?: MarkerDef[]; height?: number; showVolume?: boolean }) {
+  const phone = useIsPhone();
+  const height = phone ? Math.min(desktopHeight, 300) : desktopHeight;
   const el = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const fitted = useRef(false);
@@ -82,7 +96,7 @@ export function CandleChart({ candles, overlays = [], priceLines = [], markers =
     for (const p of priceLines) series.createPriceLine({ price: p.price, color: p.color, lineWidth: 1, lineStyle: p.dashed ? LineStyle.Dashed : LineStyle.Solid, axisLabelVisible: true, title: p.title });
     if (markers.length) createSeriesMarkers(series, markers.map((m) => ({ ...m, time: m.time as Time })) as SeriesMarker<Time>[]);
     if (!fitted.current) {
-      chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, candles.length - 160), to: candles.length + 5 });
+      chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, candles.length - (phone ? 70 : 160)), to: candles.length + (phone ? 3 : 5) });
       fitted.current = true;
     }
     return () => {
@@ -94,7 +108,7 @@ export function CandleChart({ candles, overlays = [], priceLines = [], markers =
         }
       }
     };
-  }, [candles, overlays, priceLines, markers, showVolume]);
+  }, [candles, overlays, priceLines, markers, showVolume, phone]);
 
   return <div ref={el} style={{ height }} className="w-full" />;
 }
@@ -105,7 +119,9 @@ function autoFormat(c: Candle[]) {
   return { type: "price" as const, precision, minMove: 1 / 10 ** precision };
 }
 
-export function LineChart({ points, height = 220, color = "#8b9cff", baseline }: { points: { time: number; value: number }[]; height?: number; color?: string; baseline?: number }) {
+export function LineChart({ points, height: desktopHeight = 220, color = "#8b9cff", baseline }: { points: { time: number; value: number }[]; height?: number; color?: string; baseline?: number }) {
+  const phone = useIsPhone();
+  const height = phone ? Math.min(desktopHeight, 200) : desktopHeight;
   const el = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!el.current || !points.length) return;

@@ -40,7 +40,25 @@ export default function HistoryPage() {
         {closed.length === 0 ? (
           <p className="text-sm text-ink-3">No closed positions yet.</p>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          <ul className="divide-y divide-line md:hidden">
+            {closed.map((c) => (
+              <li key={c.id} className="flex items-center justify-between gap-3 py-2.5">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5 text-sm">
+                    <Badge tone={c.side === "long" ? "bull" : "bear"}>{c.side}</Badge>
+                    <span className="truncate font-medium">{c.asset}</span>
+                  </div>
+                  <div className="mt-0.5 truncate text-[11px] text-ink-3">{c.setup} · {new Date(c.closedAt).toLocaleDateString()} · {((c.closedAt - c.openedAt) / 3_600_000).toFixed(1)}h</div>
+                </div>
+                <div className="text-right">
+                  <div className={cn("num text-sm font-semibold", c.pnl >= 0 ? "text-bull" : "text-bear")}>{usd(c.pnl)}</div>
+                  <div className="num text-[11px] text-ink-3">{c.r.toFixed(2)}R</div>
+                </div>
+              </li>
+            ))}
+          </ul>
+          <div className="hidden overflow-x-auto md:block">
             <table className="w-full min-w-[640px] text-xs">
               <thead className="text-left text-ink-3">
                 <tr>
@@ -68,13 +86,32 @@ export default function HistoryPage() {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </Card>
       <Card className="mt-4" title="Fills (simulated)" subtitle="Partial exits appear as separate fills.">
         {fills.length === 0 ? (
           <p className="text-sm text-ink-3">No fills yet.</p>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          <ul className="divide-y divide-line md:hidden">
+            {fills.map((f) => (
+              <li key={f.id} className="flex items-center justify-between gap-3 py-2.5">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5 text-sm">
+                    <span className="truncate font-medium">{f.asset}</span>
+                    <Badge tone={f.reason.startsWith("tp") ? "bull" : f.reason === "manual" ? "neutral" : "bear"}>{f.reason}</Badge>
+                  </div>
+                  <div className="num mt-0.5 truncate text-[11px] text-ink-3">{f.side} {f.qty.toPrecision(3)} · {price(f.entry)} → {price(f.exit)} · fees {usd(f.fees)}</div>
+                </div>
+                <div className="text-right">
+                  <div className={cn("num text-sm font-semibold", f.pnl >= 0 ? "text-bull" : "text-bear")}>{usd(f.pnl)}</div>
+                  <div className="text-[10px] text-ink-3">{new Date(f.closedAt).toLocaleDateString()}</div>
+                </div>
+              </li>
+            ))}
+          </ul>
+          <div className="hidden overflow-x-auto md:block">
             <table className="w-full min-w-[760px] text-xs">
               <thead className="text-left text-ink-3">
                 <tr>
@@ -108,6 +145,7 @@ export default function HistoryPage() {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </Card>
     </div>

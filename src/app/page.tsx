@@ -35,7 +35,7 @@ export default function Overview() {
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         {[
           { label: "Bitcoin", q: t },
           { label: "Ethereum", q: eth },
@@ -49,7 +49,7 @@ export default function Overview() {
             ) : (
               <Skeleton className="h-12" />
             )}
-            <div className="mt-2">
+            <div className="mt-2 min-w-0">
               <DataBadge meta={q.meta} />
             </div>
           </Card>
@@ -60,7 +60,7 @@ export default function Overview() {
         </Card>
       </div>
 
-      <div className="mt-4 grid gap-4 xl:grid-cols-[1.2fr_1fr]">
+      <div className="mt-3 grid gap-3 sm:mt-4 sm:gap-4 xl:grid-cols-[1.2fr_1fr]">
         <Card title="Bitcoin — engine decision" subtitle={`BTC perpetual · ${btc.tf} · multi-timeframe with ${btc.htf}`} right={<Link href="/signals" className="inline-flex items-center gap-1 text-xs text-accent">All signals <ArrowRight className="h-3 w-3" /></Link>}>
           {btc.error ? (
             <ErrorBox message={btc.error} onRetry={btc.refresh} />
@@ -68,7 +68,7 @@ export default function Overview() {
             <Skeleton className="h-36" />
           ) : (
             <div className="flex items-start gap-4">
-              <ScoreRing score={sig.qualityScore} size={72} />
+              <ScoreRing score={sig.qualityScore} size={56} muted={sig.direction === "NO_TRADE"} />
               <div className="min-w-0 flex-1 space-y-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <DirectionBadge d={sig.direction} large />
@@ -120,7 +120,7 @@ export default function Overview() {
         </Card>
       </div>
 
-      <div className="mt-4 grid gap-4 xl:grid-cols-[1.2fr_1fr]">
+      <div className="mt-3 grid gap-3 sm:mt-4 sm:gap-4 xl:grid-cols-[1.2fr_1fr]">
         <Card title="Paper equity curve" subtitle="Simulated account — real prices, virtual money.">
           {paper.equityHistory.length > 1 ? <LineChart points={paper.equityHistory.map((h) => ({ time: h.t / 1000, value: h.equity }))} baseline={paper.startingBalance} /> : <p className="py-10 text-center text-sm text-ink-3">Open a paper trade to start tracking performance.</p>}
           <div className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-4">

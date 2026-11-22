@@ -41,11 +41,12 @@ export default function PaperPage() {
           </Button>
         }
       />
-      <div className="mb-4 flex items-center gap-2 rounded-lg border border-info/25 bg-info-soft/30 px-3 py-2 text-xs text-ink-2">
-        <FlaskConical className="h-4 w-4 text-info" /> <b className="text-ink">SIMULATION</b> — fills are modelled (price ± {settings.slippageBps}bps slippage, {settings.takerFeeBps}bps fee/side, funding on perps). Real exchange fills, queue position and wicks between checks can differ.
+      <div className="mb-3 flex items-start gap-2 rounded-lg border border-info/25 bg-info-soft/30 px-3 py-2 text-xs leading-relaxed text-ink-2 sm:mb-4">
+        <FlaskConical className="mt-0.5 h-4 w-4 shrink-0 text-info" />
+        <p><b className="text-ink">SIMULATION</b> — fills are modelled (price ± {settings.slippageBps}bps slippage, {settings.takerFeeBps}bps fee/side, funding on perps). Real exchange fills, queue position and wicks between checks can differ.</p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-6">
         <Card><Stat label="Equity" value={usd(st.equity)} sub={`start ${usd(paper.startingBalance, 0)}`} /></Card>
         <Card><Stat label="Total PnL" value={usd(st.totalPnl)} tone={st.totalPnl >= 0 ? "bull" : "bear"} sub={pct(st.totalPnlPct)} /></Card>
         <Card><Stat label="Today PnL" value={usd(st.todayPnl)} tone={st.todayPnl >= 0 ? "bull" : "bear"} /></Card>
@@ -54,14 +55,47 @@ export default function PaperPage() {
         <Card><Stat label="Win rate / PF" value={`${st.winRate == null ? "—" : (st.winRate * 100).toFixed(0) + "%"} / ${st.profitFactor == null ? "—" : Number.isFinite(st.profitFactor) ? st.profitFactor.toFixed(2) : "∞"}`} sub={`${st.closed} closed · DD ${st.maxDrawdownPct.toFixed(1)}%`} /></Card>
       </div>
 
-      <div className="mt-4 grid gap-4 xl:grid-cols-[420px_1fr]">
+      <div className="mt-3 grid gap-3 sm:mt-4 sm:gap-4 xl:grid-cols-[420px_1fr]">
         <Ticket />
         <div className="min-w-0 space-y-4">
           <Card title="Open positions" subtitle={`${paper.positions.length} open · monitored every 10s`}>
             {paper.positions.length === 0 ? (
               <p className="text-sm text-ink-3">No open positions. Use the ticket or press &quot;Paper trade this&quot; on any actionable signal.</p>
             ) : (
-              <div className="overflow-x-auto">
+              <>
+              <div className="space-y-2 md:hidden">
+                {paper.positions.map((p) => {
+                  const u = unrealized(p);
+                  return (
+                    <div key={p.id} className="rounded-lg border border-line p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex min-w-0 items-center gap-1.5">
+                          <Badge tone={p.side === "long" ? "bull" : "bear"}>{p.side}</Badge>
+                          <span className="truncate text-sm font-semibold">{p.asset}</span>
+                          {p.leverage > 1 && <span className="text-xs text-ink-3">{p.leverage}x</span>}
+                        </div>
+                        <span className={cn("num text-sm font-semibold", u >= 0 ? "text-bull" : "text-bear")}>{usd(u)}</span>
+                      </div>
+                      <div className="mt-0.5 text-[10px] text-ink-3">{p.market} · {p.setup} · {timeAgo(p.openedAt)}</div>
+                      <div className="num mt-2 grid grid-cols-3 gap-2 text-[11px]">
+                        <div><div className="text-ink-3">Entry</div>{price(p.entry)}</div>
+                        <div><div className="text-ink-3">Last</div>{price(p.lastPrice)}</div>
+                        <div><div className="text-ink-3">Size</div>{p.qty.toPrecision(3)}</div>
+                        <div><div className="text-ink-3">Stop</div><span className="text-bear">{price(p.stop)}</span></div>
+                        <div><div className="text-ink-3">Next TP</div><span className="text-bull">{price(p.takeProfits.find((t) => !t.hit)?.price ?? null)}</span></div>
+                        <div><div className="text-ink-3">Liq.</div><span className="text-warn">{p.liqPrice ? price(p.liqPrice) : "—"}</span></div>
+                      </div>
+                      <div className="mt-3 grid grid-cols-4 gap-1.5">
+                        <Button size="sm" onClick={() => closePart(p.id, 0.25)}>25%</Button>
+                        <Button size="sm" onClick={() => closePart(p.id, 0.5)}>50%</Button>
+                        <Button size="sm" variant="ghost" disabled={p.stop === p.entry} onClick={() => moveBE(p.id)}>BE</Button>
+                        <Button size="sm" variant="danger" onClick={() => closePart(p.id, 1)}>Close</Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="hidden overflow-x-auto md:block">
                 <table className="w-full min-w-[760px] text-xs">
                   <thead className="text-left text-ink-3">
                     <tr>
@@ -110,6 +144,7 @@ export default function PaperPage() {
                   </tbody>
                 </table>
               </div>
+              </>
             )}
           </Card>
           <Card title="Equity curve">

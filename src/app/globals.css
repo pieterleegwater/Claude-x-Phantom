@@ -47,3 +47,14 @@ body {
 * { scrollbar-width: thin; scrollbar-color: #2d333d transparent; }
 input, select, textarea { color-scheme: dark; }
 .term { text-decoration: underline dotted var(--color-ink-3); text-underline-offset: 3px; cursor: help; }
+
+html { -webkit-text-size-adjust: 100%; }
+button, a, input, select, label { touch-action: manipulation; }
+body { overscroll-behavior-y: none; }
+/* iOS Safari zooms into inputs smaller than 16px — keep them at 16px on phones */
+@media (max-width: 767px) {
+  input, select, textarea { font-size: 16px !important; }
+}
+.pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }

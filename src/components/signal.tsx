@@ -263,8 +263,8 @@ export function SignalCard({ s, compact }: { s: TradeSignal; compact?: boolean }
   };
   return (
     <Card className={cn(expired && "opacity-70")}>
-      <div className="flex items-start gap-4">
-        <ScoreRing score={s.qualityScore} />
+      <div className="flex items-start gap-3 sm:gap-4">
+        <ScoreRing score={s.qualityScore} size={48} muted={s.direction === "NO_TRADE"} label={s.direction === "NO_TRADE" ? "Market condition score — no qualifying setup, so this is not a trade score" : undefined} />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <DirectionBadge d={s.direction} large />

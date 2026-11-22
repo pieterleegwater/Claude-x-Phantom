@@ -66,13 +66,16 @@ export default function TokenPage({ params }: { params: Promise<{ mint: string }
           </Notice>
         </div>
       )}
-      <div className="grid gap-4 xl:grid-cols-[1fr_400px]">
+      <div className="mb-3 xl:hidden">
+        <SignalCard s={a.signal} />
+      </div>
+      <div className="grid gap-3 sm:gap-4 xl:grid-cols-[1fr_400px]">
         <div className="min-w-0 space-y-4">
           <Card pad={false} title={<span className="flex items-center gap-3">Price (USD) <Segmented size="sm" value={tf} onChange={setTf} options={(["1m", "5m", "15m", "1h", "4h"] as const).map((x) => ({ value: x, label: x }))} /></span>} right={<DataBadge meta={r.meta} loading={r.loading} />}>
             {r.data.candles.length ? <CandleChart candles={r.data.candles} overlays={overlays} height={360} /> : <p className="p-6 text-center text-sm text-ink-3">Pool candles unavailable from GeckoTerminal for this pair.</p>}
           </Card>
           <Card>
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
               <Stat label="Price" value={`$${t.priceUsd.toPrecision(5)}`} sub={`${pct(t.priceChange.h1, 1)} 1h · ${pct(t.priceChange.h24, 1)} 24h`} />
               <Stat label={<Term k="liquidity">Liquidity</Term>} value={`$${compact(t.liquidityUsd)}`} sub={a.liquidityChangePct != null ? `${pct(a.liquidityChangePct, 1)} since last scan` : undefined} />
               <Stat label={<Term k="marketcap">Market cap</Term>} value={`$${compact(t.marketCap ?? t.fdv)}`} sub={t.fdv ? `FDV $${compact(t.fdv)}` : undefined} />
@@ -155,7 +158,9 @@ export default function TokenPage({ params }: { params: Promise<{ mint: string }
           </Card>
         </div>
         <div className="min-w-0 space-y-4">
-          <SignalCard s={a.signal} />
+          <div className="hidden xl:block">
+            <SignalCard s={a.signal} />
+          </div>
           <Card title="Transaction preview" subtitle="Read-only. Shows token, amount, slippage, fees and destination before anything is signed.">
             <TxPreview mint={t.mint} symbol={t.symbol} defaultUsd={Math.min(settings.memeTradeSizeUsd, 500)} />
           </Card>
