@@ -53,15 +53,40 @@ export function WalletButton() {
     }
   }, [pending, wallet, connected, connecting, connect]);
 
-  if (connected && publicKey)
+  if (connected && publicKey) {
+    const addr = publicKey.toBase58();
     return (
-      <div className="flex items-center gap-1">
-        <span className="num hidden rounded-lg border border-line-2 bg-panel-2 px-2.5 py-1.5 text-xs text-ink sm:inline">{shortAddr(publicKey.toBase58())}</span>
-        <Button size="sm" variant="ghost" onClick={() => disconnect()} title="Disconnect wallet" ariaLabel="Disconnect wallet">
-          <LogOut className="h-3.5 w-3.5" />
-        </Button>
-      </div>
+      <>
+        {/* Visible on every screen size: green dot + short address = connected */}
+        <button onClick={() => setOpen(true)} className="num inline-flex h-8 items-center gap-1.5 rounded-lg border border-bull/40 bg-bull-soft/60 px-2 text-xs text-ink" aria-label={`Wallet connected: ${addr}`} title="Wallet connected">
+          <span className="h-2 w-2 rounded-full bg-bull" />
+          {addr.slice(0, 4)}…{addr.slice(-3)}
+        </button>
+        <Modal open={open} onClose={() => setOpen(false)} title="Wallet connected">
+          <div className="space-y-4 text-sm">
+            <div className="flex items-center gap-2">
+              <span className="h-2.5 w-2.5 rounded-full bg-bull" />
+              <span className="text-ink">{wallet?.adapter.name ?? "Wallet"} is connected (read-only).</span>
+            </div>
+            <div>
+              <div className="text-[11px] uppercase tracking-wider text-ink-3">Public address</div>
+              <button className="num mt-1 inline-flex items-center gap-1 break-all text-left text-xs hover:text-accent" onClick={() => navigator.clipboard?.writeText(addr)} title="Copy address">
+                {addr} <Copy className="h-3 w-3 shrink-0" />
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <a href="/portfolio" className="inline-flex h-9 items-center rounded-lg border border-line-2 bg-panel-2 px-3.5 text-sm font-medium" onClick={() => setOpen(false)}>
+                View balances
+              </a>
+              <Button variant="danger" onClick={() => { disconnect(); setOpen(false); }}>
+                <LogOut className="h-3.5 w-3.5" /> Disconnect
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      </>
     );
+  }
 
   const detected = wallets.filter((w) => w.readyState === WalletReadyState.Installed || w.readyState === WalletReadyState.Loadable);
   const phantom = wallets.find((w) => w.adapter.name === "Phantom");
