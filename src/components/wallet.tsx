@@ -95,19 +95,51 @@ export function WalletButton() {
                 ))}
             </div>
           ) : (
-            <div className="rounded-lg border border-line p-4 text-sm text-ink-2">
-              No Solana wallet detected in this browser.{" "}
-              <a className="inline-flex items-center gap-1 text-accent underline" href="https://phantom.com/download" target="_blank" rel="noopener noreferrer">
-                Install Phantom <ExternalLink className="h-3 w-3" />
-              </a>{" "}
-              and reload. On mobile, open EdgePilot inside the Phantom app&apos;s browser.
-            </div>
+            <NoWalletHelp />
           )}
           {!phantom && detected.length > 0 && <p className="text-xs text-ink-3">Phantom not detected — other Wallet Standard wallets are listed.</p>}
           {err && <p className="text-xs text-bear">{err}</p>}
         </div>
       </Modal>
     </>
+  );
+}
+
+/** Phantom universal link that opens a URL inside the Phantom app's in-app browser. */
+function phantomBrowseLink() {
+  if (typeof window === "undefined") return "https://phantom.com/download";
+  return `https://phantom.app/ul/browse/${encodeURIComponent(window.location.href)}?ref=${encodeURIComponent(window.location.origin)}`;
+}
+
+function NoWalletHelp() {
+  const [mobile, setMobile] = useState(false);
+  useEffect(() => setMobile(/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)), []);
+  if (mobile)
+    return (
+      <div className="space-y-3 rounded-lg border border-line p-4 text-sm text-ink-2">
+        <p>
+          On a phone, wallets can&apos;t connect from Safari or Chrome. Open EdgePilot inside the <b className="text-ink">Phantom app&apos;s built-in browser</b> instead — your paper account and settings there are separate from this browser.
+        </p>
+        <a href={phantomBrowseLink()} className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[#ab9ff2] font-semibold text-[#1c1c2e]">
+          Open in Phantom app
+        </a>
+        <p className="text-xs text-ink-3">
+          No Phantom yet?{" "}
+          <a className="text-accent underline" href="https://phantom.com/download" target="_blank" rel="noopener noreferrer">
+            Install it
+          </a>{" "}
+          first, create or import your wallet in the app, then come back and tap the button.
+        </p>
+      </div>
+    );
+  return (
+    <div className="rounded-lg border border-line p-4 text-sm text-ink-2">
+      No Solana wallet detected in this browser.{" "}
+      <a className="inline-flex items-center gap-1 text-accent underline" href="https://phantom.com/download" target="_blank" rel="noopener noreferrer">
+        Install the Phantom extension <ExternalLink className="h-3 w-3" />
+      </a>{" "}
+      (Chrome, Brave, Firefox or Edge), then reload this page.
+    </div>
   );
 }
 
