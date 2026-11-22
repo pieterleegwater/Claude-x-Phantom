@@ -13,6 +13,7 @@ export interface Settings {
   slippageBps: number;
   maintenanceMarginRate: number; // fraction e.g. 0.004
   memeMaxPositionPct: number; // max % of equity per memecoin position
+  liveMaxTradeUsd: number; // hard cap per REAL-money buy
   memeTradeSizeUsd: number; // size used for slippage estimates
   memeMinLiquidityUsd: number;
   primaryTimeframe: "15m" | "1h" | "4h";
@@ -41,6 +42,7 @@ export const DEFAULT_SETTINGS: Settings = {
   slippageBps: 3,
   maintenanceMarginRate: 0.004,
   memeMaxPositionPct: 2,
+  liveMaxTradeUsd: 50,
   memeTradeSizeUsd: 200,
   memeMinLiquidityUsd: 25_000,
   primaryTimeframe: "1h",

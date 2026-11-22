@@ -162,7 +162,7 @@ export default function TokenPage({ params }: { params: Promise<{ mint: string }
             <SignalCard s={a.signal} />
           </div>
           <Card title="Transaction preview" subtitle="Read-only. Shows token, amount, slippage, fees and destination before anything is signed.">
-            <TxPreview mint={t.mint} symbol={t.symbol} defaultUsd={Math.min(settings.memeTradeSizeUsd, 500)} />
+            <TxPreview mint={t.mint} symbol={t.symbol} defaultUsd={Math.min(settings.memeTradeSizeUsd, settings.liveMaxTradeUsd, 500)} />
           </Card>
         </div>
       </div>

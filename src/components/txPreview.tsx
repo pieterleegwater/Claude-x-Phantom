@@ -1,7 +1,10 @@
 "use client";
 import { useState } from "react";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
-import { VersionedTransaction } from "@solana/web3.js";
+import Link from "next/link";
+import { simulateAndSend, waitForConfirmation } from "@/lib/client/solanaTx";
+import { setState, useStore } from "@/lib/client/store";
+import { recordBuy } from "@/lib/live";
 import { ShieldCheck, Lock } from "lucide-react";
 import { Button, Field, NumInput, Notice, cn, usd, DataBadge } from "./ui";
 import { apiGet } from "@/lib/client/useApi";
@@ -31,7 +34,10 @@ const LIVE = process.env.NEXT_PUBLIC_ENABLE_LIVE_EXECUTION === "true";
  * checklist + typed confirmation + simulation + the wallet's own approval prompt.
  */
 export function TxPreview({ mint, symbol, defaultUsd = 50 }: { mint: string; symbol: string; defaultUsd?: number }) {
-  const { publicKey, connected, sendTransaction } = useWallet();
+  const wallet = useWallet();
+  const { publicKey, connected } = wallet;
+  const maxTrade = useStore((st) => st.settings.liveMaxTradeUsd);
+  const [boughtOk, setBoughtOk] = useState(false);
   const { connection } = useConnection();
   const [amountUsd, setAmountUsd] = useState(defaultUsd);
   const [slippageBps, setSlippageBps] = useState(100);
@@ -65,18 +71,30 @@ export function TxPreview({ mint, symbol, defaultUsd = 50 }: { mint: string; sym
 
   const execute = async () => {
     if (!LIVE || !publicKey || !allChecked) return;
+    if (amountUsd > maxTrade) {
+      setStatus(`Amount exceeds your real-money limit of ${usd(maxTrade, 0)} per trade (Settings → Memecoins).`);
+      return;
+    }
+    setBoughtOk(false);
     setStatus("Building unsigned transaction…");
     try {
-      const res = await fetch("/api/swap/build", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ outputMint: mint, amountUsd, slippageBps, userPublicKey: publicKey.toBase58() }) });
+      const res = await fetch("/api/swap/build", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ side: "buy", outputMint: mint, amountUsd, slippageBps, userPublicKey: publicKey.toBase58() }) });
       const j = await res.json();
       if (!j.ok) throw new Error(j.error);
-      const tx = VersionedTransaction.deserialize(Uint8Array.from(atob(j.swapTransaction), (c) => c.charCodeAt(0)));
-      setStatus("Simulating transaction…");
-      const sim = await connection.simulateTransaction(tx, { sigVerify: false });
-      if (sim.value.err) throw new Error(`Simulation failed: ${JSON.stringify(sim.value.err)}`);
-      setStatus("Simulation OK. Review and approve in your wallet…");
-      const sig = await sendTransaction(tx, connection);
-      setStatus(`Submitted: ${sig}. Verify on a block explorer.`);
+      const sig = await simulateAndSend(j.swapTransaction, connection, wallet, setStatus);
+      setStatus("Submitted — waiting for confirmation…");
+      const conf = await waitForConfirmation(connection, sig);
+      if (conf === "failed") throw new Error(`Transaction failed on-chain (${sig.slice(0, 8)}…). Your SOL was not spent except the network fee.`);
+      const decimals = q?.decimals ?? null;
+      const tokens = decimals != null ? Number(j.quote.outAmount) / 10 ** decimals : NaN;
+      const spentUsd = (Number(j.quote.inAmount) / 1e9) * j.solPriceUsd;
+      if (Number.isFinite(tokens)) {
+        setState((st) => ({ live: recordBuy(st.live, { mint, symbol, decimals, tokens, usd: spentUsd, sig, status: conf === "confirmed" ? "confirmed" : "unconfirmed", owner: publicKey.toBase58() }) }));
+      }
+      setBoughtOk(true);
+      setChecks([false, false, false, false]);
+      setTyped("");
+      setStatus(conf === "confirmed" ? `Bought ✔ (${sig.slice(0, 8)}…). Set a stop-loss and targets in Live Trades.` : `Submitted ${sig.slice(0, 8)}… — not confirmed yet; check Phantom. Recorded as unconfirmed.`);
     } catch (e) {
       setStatus(`Cancelled / failed: ${e instanceof Error ? e.message : String(e)}`);
     }
@@ -148,6 +166,12 @@ export function TxPreview({ mint, symbol, defaultUsd = 50 }: { mint: string; sym
             </div>
           )}
           {status && <p className="text-xs text-ink-2">{status}</p>}
+          {boughtOk && (
+            <Link href="/live" className="inline-flex h-9 items-center rounded-lg bg-accent/90 px-3.5 text-sm font-medium text-[#0b0d10]">
+              Set stop-loss &amp; targets →
+            </Link>
+          )}
+          {LIVE && <p className="text-[11px] text-ink-3">Real-money limit: {usd(maxTrade, 0)} per trade (Settings → Memecoins).</p>}
         </div>
       )}
     </div>

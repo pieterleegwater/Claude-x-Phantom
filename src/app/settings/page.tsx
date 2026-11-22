@@ -60,6 +60,7 @@ export default function SettingsPage() {
             <Field label="Max position (% equity)"><NumInput value={s.memeMaxPositionPct} onChange={(v) => set({ memeMaxPositionPct: v })} min={0.1} max={20} /></Field>
             <Field label="Trade size for slippage checks ($)"><NumInput value={s.memeTradeSizeUsd} onChange={(v) => set({ memeTradeSizeUsd: v })} min={10} max={100000} /></Field>
             <Field label="Min liquidity ($)"><NumInput value={s.memeMinLiquidityUsd} onChange={(v) => set({ memeMinLiquidityUsd: v })} min={1000} /></Field>
+            <Field label="Real-money limit per buy ($)" hint="Hard cap for live Phantom buys."><NumInput value={s.liveMaxTradeUsd} onChange={(v) => set({ liveMaxTradeUsd: v })} min={1} max={10000} /></Field>
           </div>
         </Card>
         <Card title="Notifications" subtitle="Alerts fire while EdgePilot is open in a tab.">

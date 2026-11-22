@@ -4,6 +4,7 @@
 import { useSyncExternalStore } from "react";
 import { DEFAULT_SETTINGS, type Settings } from "../settings";
 import { newPaperState, migratePaper, type PaperState } from "../paper";
+import { emptyLive, type LiveState } from "../live";
 import type { TradeSignal } from "../types";
 
 export interface AppNotification {
@@ -54,6 +55,8 @@ export interface AppState {
   signalLog: TradeSignal[];
   ticket: TicketDraft | null;
   aiAccessCode: string;
+  live: LiveState; // real-money positions & trades (tracking only)
+  liveAlert: { mint: string; kind: "stop" | "tp"; price: number; pct: number; index?: number; at: number } | null;
 }
 
 const KEY = "edgepilot:v1";
@@ -67,6 +70,8 @@ const initial = (): AppState => ({
   leaderboard: {},
   signalLog: [],
   ticket: null,
+  live: emptyLive(),
+  liveAlert: null,
   aiAccessCode: "",
 });
 
@@ -114,6 +119,8 @@ export function hydrate() {
     ...loaded,
     settings: { ...base.settings, ...(loaded.settings ?? {}), notifications: { ...base.settings.notifications, ...(loaded.settings?.notifications ?? {}) } },
     paper: migratePaper(loaded.paper, base.settings.accountEquity),
+    live: loaded.live && Array.isArray(loaded.live.positions) ? loaded.live : emptyLive(),
+    liveAlert: null,
     hydrated: true,
   };
   listeners.forEach((l) => l());
@@ -137,6 +144,8 @@ function mergeLoaded(loaded: Partial<AppState>): AppState {
     ...loaded,
     settings: { ...base.settings, ...(loaded.settings ?? {}), notifications: { ...base.settings.notifications, ...(loaded.settings?.notifications ?? {}) } },
     paper: migratePaper(loaded.paper, base.settings.accountEquity),
+    live: loaded.live && Array.isArray(loaded.live.positions) ? loaded.live : emptyLive(),
+    liveAlert: null,
     hydrated: true,
   };
 }

@@ -2,10 +2,11 @@
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Radar, Coins, Bitcoin, FlaskConical, Gamepad2, ShieldHalf, History, Settings as Cog, Bell, GraduationCap, Menu, X, CheckCheck, MoreHorizontal } from "lucide-react";
+import { LayoutDashboard, Radar, Coins, Bitcoin, FlaskConical, Gamepad2, ShieldHalf, History, Settings as Cog, Bell, GraduationCap, Menu, X, CheckCheck, MoreHorizontal, Zap } from "lucide-react";
 import { hydrate, setState, useStore } from "@/lib/client/store";
 import { useTicker } from "@/lib/client/hooks";
-import { SolanaProviders, WalletButton } from "./wallet";
+import { SolanaProviders, WalletButton, useWalletData } from "./wallet";
+import { LiveAlertModal } from "./live";
 import { Watcher } from "./watcher";
 import { Modal, Toggle, cn, pct, price, timeAgo } from "./ui";
 import { GLOSSARY } from "@/lib/glossary";
@@ -17,6 +18,7 @@ const NAV = [
   { href: "/bitcoin", label: "Bitcoin Terminal", icon: Bitcoin },
   { href: "/lab", label: "Strategy Lab", icon: FlaskConical },
   { href: "/paper", label: "Paper Trading", icon: Gamepad2 },
+  { href: "/live", label: "Live Trades", icon: Zap },
   { href: "/portfolio", label: "Portfolio & Risk", icon: ShieldHalf },
   { href: "/history", label: "Trade History", icon: History },
   { href: "/settings", label: "Settings", icon: Cog },
@@ -86,6 +88,17 @@ function MobileTabBar({ onMore }: { onMore: () => void }) {
       </div>
     </nav>
   );
+}
+
+/** Only loads wallet balances when a live stop/TP alert is actually showing. */
+function LiveAlertMount() {
+  const alert = useStore((s) => s.liveAlert);
+  return alert ? <LiveAlertWithBalances /> : null;
+}
+function LiveAlertWithBalances() {
+  const w = useWalletData();
+  const balances = Object.fromEntries(w.tokens.map((t) => [t.mint, { raw: t.raw, decimals: t.decimals }]));
+  return <LiveAlertModal balances={balances} />;
 }
 
 function TopTicker() {
@@ -233,6 +246,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <main className="mx-auto w-full max-w-[1400px] flex-1 px-3 pb-24 pt-4 sm:px-6 sm:py-5 lg:pb-5">{children}</main>
         </div>
       </div>
+      <LiveAlertMount />
       <MobileTabBar onMore={() => setMobileOpen(true)} />
       <Watcher />
     </SolanaProviders>

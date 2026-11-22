@@ -11,6 +11,7 @@ import { updatePrices, type PriceUpdate } from "@/lib/paper";
 import { analyzeBtc } from "@/lib/analysis/btcEngine";
 import { analyzeMeme, type MemeToken } from "@/lib/analysis/memeEngine";
 import { priorHigh, priorLow } from "@/lib/indicators";
+import { openPositions, triggeredLevels } from "@/lib/live";
 import type { Candle, DerivativesSnapshot, Ticker } from "@/lib/types";
 import { HIGHER_TF } from "@/lib/client/hooks";
 
@@ -61,6 +62,42 @@ export function Watcher() {
     };
     tick();
     const id = setInterval(tick, 10_000);
+    return () => clearInterval(id);
+  }, [hydrated]);
+
+  // ---- Live (real-money) stop-loss / take-profit monitor — ALERTS ONLY, never sells.
+  const liveAlerted = useRef<Record<string, number>>({});
+  useEffect(() => {
+    if (!hydrated) return;
+    const tick = async () => {
+      const s = getState();
+      const watch = openPositions(s.live).filter((p) => p.stop != null || p.tps.some((t) => t.status === "planned"));
+      if (!watch.length || !isLeaderTab()) return;
+      try {
+        const r = await apiGet<Record<string, { priceUsd: number }>>(`/api/memecoins/prices?mints=${watch.map((p) => p.mint).slice(0, 30).join(",")}`);
+        for (const p of watch) {
+          const px = r.data[p.mint]?.priceUsd;
+          if (!px) continue;
+          const hit = triggeredLevels(p, px);
+          if (!hit) continue;
+          const key = `${p.mint}:${hit.kind}:${hit.index ?? ""}`;
+          if (Date.now() - (liveAlerted.current[key] ?? 0) < 10 * 60_000) continue; // snooze 10 min
+          liveAlerted.current[key] = Date.now();
+          if (!getState().liveAlert) setState({ liveAlert: { mint: p.mint, kind: hit.kind, price: hit.price, pct: hit.pct, index: hit.index, at: Date.now() } });
+          notify({
+            key: `live-${key}-${Math.floor(Date.now() / 600_000)}`,
+            type: hit.kind === "stop" ? "risk" : "tp",
+            title: hit.kind === "stop" ? `STOP-LOSS hit: ${p.symbol} (real money)` : `Target reached: ${p.symbol} (real money)`,
+            body: `Price ${px.toPrecision(4)} vs your ${hit.kind === "stop" ? "stop" : "target"} ${hit.price.toPrecision(4)}. Open EdgePilot and approve the sale in Phantom.`,
+            href: "/live",
+          });
+        }
+      } catch {
+        /* retry next tick */
+      }
+    };
+    tick();
+    const id = setInterval(tick, 15_000);
     return () => clearInterval(id);
   }, [hydrated]);
 

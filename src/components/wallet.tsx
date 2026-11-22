@@ -168,9 +168,11 @@ function NoWalletHelp() {
   );
 }
 
-interface TokenBal {
+export interface TokenBal {
   mint: string;
   amount: number;
+  raw: string; // exact base units
+
   decimals: number;
   program: string;
   symbol?: string;
@@ -178,7 +180,7 @@ interface TokenBal {
   valueUsd?: number;
 }
 
-export function useWalletData() {
+export function useWalletData(refreshMs = 0) {
   const { connection } = useConnection();
   const { publicKey, connected } = useWallet();
   const [sol, setSol] = useState<number | null>(null);
@@ -187,6 +189,7 @@ export function useWalletData() {
   const [error, setError] = useState<string>();
   const [loading, setLoading] = useState(false);
   const [tick, setTick] = useState(0);
+  const [complete, setComplete] = useState(false);
 
   useEffect(() => {
     if (!connected || !publicKey) {
@@ -198,12 +201,17 @@ export function useWalletData() {
     (async () => {
       setLoading(true);
       setError(undefined);
+      setComplete(false);
+      let t22failed = false;
       try {
         const [bal, genesis, t1, t2] = await Promise.all([
           connection.getBalance(publicKey),
           connection.getGenesisHash(),
           connection.getParsedTokenAccountsByOwner(publicKey, { programId: TOKEN_PROGRAM }),
-          connection.getParsedTokenAccountsByOwner(publicKey, { programId: TOKEN_2022 }).catch(() => ({ context: { slot: 0 }, value: [] }) as RpcResponseAndContext<{ pubkey: PublicKey; account: AccountInfo<ParsedAccountData> }[]>),
+          connection.getParsedTokenAccountsByOwner(publicKey, { programId: TOKEN_2022 }).catch(() => {
+            t22failed = true;
+            return { context: { slot: 0 }, value: [] } as RpcResponseAndContext<{ pubkey: PublicKey; account: AccountInfo<ParsedAccountData> }[]>;
+          }),
         ]);
         if (cancelled) return;
         setSol(bal / LAMPORTS_PER_SOL);
@@ -214,8 +222,8 @@ export function useWalletData() {
           [t2.value, "Token-2022"],
         ] as const) {
           for (const a of arr) {
-            const info = (a.account.data as { parsed?: { info?: { mint: string; tokenAmount: { uiAmount: number; decimals: number } } } }).parsed?.info;
-            if (info && info.tokenAmount.uiAmount > 0) list.push({ mint: info.mint, amount: info.tokenAmount.uiAmount, decimals: info.tokenAmount.decimals, program: prog });
+            const info = (a.account.data as { parsed?: { info?: { mint: string; tokenAmount: { uiAmount: number; decimals: number; amount: string } } } }).parsed?.info;
+            if (info && info.tokenAmount.uiAmount > 0) list.push({ mint: info.mint, amount: info.tokenAmount.uiAmount, raw: info.tokenAmount.amount, decimals: info.tokenAmount.decimals, program: prog });
           }
         }
         if (list.length) {
@@ -235,7 +243,10 @@ export function useWalletData() {
           }
         }
         list.sort((a, b) => (b.valueUsd ?? 0) - (a.valueUsd ?? 0));
-        if (!cancelled) setTokens(list);
+        if (!cancelled) {
+          setTokens(list);
+          setComplete(!t22failed);
+        }
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e));
       } finally {
@@ -247,7 +258,14 @@ export function useWalletData() {
     };
   }, [connected, publicKey, connection, tick]);
 
-  return { publicKey, connected, sol, network, tokens, error, loading, refresh: () => setTick((t) => t + 1) };
+  useEffect(() => {
+    if (!refreshMs || !connected) return;
+    const id = setInterval(() => document.visibilityState === "visible" && setTick((t) => t + 1), refreshMs);
+    return () => clearInterval(id);
+  }, [refreshMs, connected]);
+
+  // complete = every token program was read successfully (safe to treat "missing" as zero balance)
+  return { publicKey, connected, sol, network, tokens, error, loading, complete, refresh: () => setTick((t) => t + 1) };
 }
 
 export function WalletPanel() {
