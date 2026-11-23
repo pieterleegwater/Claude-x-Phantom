@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useBtcAnalysis, useMemeScan } from "@/lib/client/hooks";
 import { logSignal, useStore } from "@/lib/client/store";
 import { SignalCard } from "@/components/signal";
+import { TrackRecordCard } from "@/components/trackRecord";
 import { Card, DataBadge, DirectionBadge, Empty, ErrorBox, PageHeader, Segmented, Skeleton, Term, Badge, price } from "@/components/ui";
 
 export default function SignalsPage() {
@@ -75,6 +76,10 @@ export default function SignalsPage() {
             ))}
           </div>
         )}
+      </div>
+
+      <div className="mt-6">
+        <TrackRecordCard compact />
       </div>
 
       <Card className="mt-6" title="Signal log" subtitle="Actionable signals generated in this browser (most recent first).">

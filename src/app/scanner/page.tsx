@@ -7,6 +7,7 @@ import { setState, useStore } from "@/lib/client/store";
 import type { MemeCategory } from "@/lib/analysis/memeEngine";
 import { Badge, Button, Card, DataBadge, Empty, ErrorBox, Notice, PageHeader, Segmented, Skeleton, Term, cn, compact, pct, inputCls } from "@/components/ui";
 import { useRouter } from "next/navigation";
+import { TrackRecordCard } from "@/components/trackRecord";
 
 const CATS: (MemeCategory | "ALL")[] = ["ALL", "EARLY MOMENTUM", "BREAKOUT", "TRENDING", "HIGH RISK", "POSSIBLE RUG", "AVOID"];
 const catTone = (c: string) => (c === "POSSIBLE RUG" || c === "AVOID" ? "bear" : c === "HIGH RISK" ? "warn" : "bull") as "bear" | "warn" | "bull";
@@ -112,6 +113,11 @@ export default function ScannerPage() {
                   <div><div className="text-ink-3">Vol 1h</div>${compact(t.volume.h1)}</div>
                   <div><div className="text-ink-3">Accel</div><span className={accel >= 2 ? "text-bull" : ""}>{accel.toFixed(1)}×</span></div>
                 </div>
+                {a.dumpRiskTop1 != null && (
+                  <p className={cn("num mt-2 text-[11px]", a.dumpRiskTop1 > 65 ? "text-bear" : a.dumpRiskTop1 > 40 ? "text-warn" : "text-ink-3")}>
+                    Dump risk: largest holder selling ≈ −{a.dumpRiskTop1.toFixed(0)}%
+                  </p>
+                )}
                 <p className="mt-2 line-clamp-2 text-[11px] leading-snug">
                   {a.critical[0] ? <span className="text-bear">{a.critical[0]}</span> : a.warnings[0] ? <span className="text-warn">{a.warnings[0]}</span> : <span className="text-ink-3">{a.reasons[0] ?? "—"}</span>}
                 </p>
@@ -190,6 +196,9 @@ export default function ScannerPage() {
         </Card>
         </>
       )}
+      <div className="mt-4">
+        <TrackRecordCard />
+      </div>
       <div className="mt-4">
         <Notice tone="warn">
           Scores use DexScreener market data and RugCheck contract reports (top 24 candidates by preliminary score get full risk checks). &quot;Whale activity&quot; is a proxy from trade sizes and insider flags, not wallet tracking. Social momentum is not measured because no reliable free source exists. Liquidity change compares with your previous scan (≥15 min ago).

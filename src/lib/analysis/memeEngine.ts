@@ -63,12 +63,18 @@ export interface MemeAnalysis {
   warnings: string[];
   reasons: string[];
   slippagePct: number;
+  /** % price drop if the largest single holder (excl. pools) sold everything now; null if unknown */
+  dumpRiskTop1: number | null;
+  /** % price drop if the top-10 holders sold together */
+  dumpRiskTop10: number | null;
   liquidityChangePct: number | null;
   ageHours: number | null;
   signal: TradeSignal;
 }
 
-const W = { momentum: 0.2, liquidity: 0.2, volumeAccel: 0.15, buyPressure: 0.1, holders: 0.15, whales: 0.05, age: 0.05, risk: 0.1 };
+// Weights sum to 1. "dumpRisk" was added after a live loss: a token can pass every contract check
+// and still collapse in one candle when a large holder sells into a thin pool.
+const W = { momentum: 0.15, liquidity: 0.15, volumeAccel: 0.12, buyPressure: 0.08, holders: 0.12, whales: 0.05, age: 0.05, risk: 0.13, dumpRisk: 0.15 };
 
 function mScore(x: number, good: number, hot: number) {
   if (!Number.isFinite(x)) return NaN;
@@ -77,6 +83,17 @@ function mScore(x: number, good: number, hot: number) {
   if (x <= good) return 40 + 60 * (x / good);
   if (x <= hot) return 100;
   return Math.max(30, 100 - ((x - hot) / hot) * 70);
+}
+
+/**
+ * Price drop if someone SELLS `valueUsd` worth of tokens into a constant-product pool whose total
+ * liquidity is `liqUsd` (half token, half quote). For x·y=k: P'/P = 1/(1+V/Y)², with Y = liq/2.
+ */
+export function dumpImpactPct(valueUsd: number, liqUsd: number) {
+  const y = liqUsd / 2;
+  if (!(y > 0)) return 100;
+  if (!(valueUsd > 0)) return 0;
+  return (1 - 1 / Math.pow(1 + valueUsd / y, 2)) * 100;
 }
 
 /** Constant-product price impact estimate for buying `sizeUsd` into a pool with total liquidity `liqUsd`. */
@@ -102,6 +119,10 @@ export function analyzeMeme(t: MemeToken, settings: Settings, opts: { prevLiquid
   const liquidityChangePct = opts.prevLiquidity ? ((t.liquidityUsd - opts.prevLiquidity) / opts.prevLiquidity) * 100 : null;
   const slippagePct = estimateSlippagePct(settings.memeTradeSizeUsd, t.liquidityUsd);
   const r = t.risk;
+  const mcapRef = t.marketCap ?? t.fdv ?? null;
+  const top1Pct = r?.topHolders?.[0]?.pct ?? null;
+  const dumpRiskTop1 = mcapRef && top1Pct != null ? dumpImpactPct((top1Pct / 100) * mcapRef, t.liquidityUsd) : null;
+  const dumpRiskTop10 = mcapRef && r?.top10Pct != null ? dumpImpactPct((r.top10Pct / 100) * mcapRef, t.liquidityUsd) : null;
 
   // ---- factors
   const momentum = 0.2 * mScore(pc.m5, 3, 15) + 0.4 * mScore(pc.h1, 10, 50) + 0.4 * mScore(pc.h6, 25, 150);
@@ -133,6 +154,16 @@ export function analyzeMeme(t: MemeToken, settings: Settings, opts: { prevLiquid
     { key: "holders", label: "Holder distribution", score: holders, detail: r?.top10Pct != null ? `Top 10 holders (excluding pools) own ${r.top10Pct.toFixed(1)}%${r.totalHolders ? ` of supply; ${r.totalHolders.toLocaleString()} holders` : ""}.` : "Holder data unavailable — factor excluded (this is itself a risk).", inputs: { top10Pct: r?.top10Pct ?? null, holders: r?.totalHolders ?? null } },
     { key: "whales", label: "Whale / insider activity (proxy)", score: whales, detail: `Average trade size $${Number.isFinite(avgTrade1) ? Math.round(avgTrade1).toLocaleString() : "—"} (1h)${r?.insidersDetected ? `; ${r.insidersDetected} insider wallets flagged by RugCheck` : ""}. Proxy only — not wallet-level tracking.`, inputs: { avgTrade1h: avgTrade1, insiders: r?.insidersDetected ?? null } },
     { key: "age", label: "Token age", score: age, detail: ageHours == null ? "Pair creation time unknown." : `Pair created ${ageHours < 48 ? `${ageHours.toFixed(1)} hours` : `${(ageHours / 24).toFixed(0)} days`} ago.`, inputs: { ageHours } },
+    {
+      key: "dumpRisk",
+      label: "Dump risk (holders vs liquidity)",
+      score: dumpRiskTop1 == null ? null : dumpRiskTop1 <= 10 ? 100 : dumpRiskTop1 <= 30 ? 100 - ((dumpRiskTop1 - 10) / 20) * 40 : dumpRiskTop1 <= 60 ? 60 - ((dumpRiskTop1 - 30) / 30) * 45 : Math.max(0, 15 - (dumpRiskTop1 - 60) / 3),
+      detail:
+        dumpRiskTop1 == null
+          ? "Holder data unavailable — cannot estimate how far price falls if a large holder sells. Treated as high risk."
+          : `If the largest holder (${top1Pct?.toFixed(1)}% of supply) sold now, price would drop ≈${dumpRiskTop1.toFixed(0)}%; if the top 10 sold, ≈${(dumpRiskTop10 ?? 0).toFixed(0)}%. A stop-loss cannot protect against this — it happens in one candle.`,
+      inputs: { dumpTop1Pct: dumpRiskTop1, dumpTop10Pct: dumpRiskTop10, top1HolderPct: top1Pct },
+    },
     { key: "risk", label: "Contract & token risk", score: riskScore, detail: r?.fetched ? `${r.risks.length} risk items reported by ${r.source}; mint authority ${r.mintAuthority ? "ENABLED" : r.mintAuthority === null ? "revoked" : "unknown"}, freeze authority ${r.freezeAuthority ? "ENABLED" : r.freezeAuthority === null ? "revoked" : "unknown"}.` : `Risk report unavailable${r?.error ? ` (${r.error})` : ""} — factor excluded. Treat as high risk.`, inputs: { risks: r?.risks.length ?? null } },
   ];
   const avail = raw.filter((f) => f.score != null && Number.isFinite(f.score));
@@ -143,6 +174,9 @@ export function analyzeMeme(t: MemeToken, settings: Settings, opts: { prevLiquid
   });
   let score = Math.round(factors.reduce((s, f) => s + (f.score ?? 0) * f.weight, 0));
   if (!r?.fetched) score = Math.min(score, 60); // never rank unverified tokens at the top
+  if (dumpRiskTop1 == null) score = Math.min(score, 60); // unknown dump risk is a risk
+  else if (dumpRiskTop1 > 65) score = Math.min(score, 50); // one wallet can wipe out most of the price
+  else if (dumpRiskTop1 > 40) score = Math.min(score, 70);
 
   // ---- red flags
   const critical: string[] = [];
@@ -160,6 +194,8 @@ export function analyzeMeme(t: MemeToken, settings: Settings, opts: { prevLiquid
   if (r?.lpLockedPct != null && r.lpLockedPct < 80) warnings.push(`Only ${r.lpLockedPct.toFixed(0)}% of LP is locked/burned — liquidity can be withdrawn.`);
   if (r?.top10Pct != null && r.top10Pct > 35) warnings.push(`Top 10 holders own ${r.top10Pct.toFixed(0)}% — concentrated supply.`);
   if (r?.insidersDetected && r.insidersDetected > 0) warnings.push(`${r.insidersDetected} insider/linked wallets detected.`);
+  if (dumpRiskTop1 != null && dumpRiskTop1 > 40) warnings.push(`Dump risk: the largest holder alone could crash the price ≈${dumpRiskTop1.toFixed(0)}% by selling.`);
+  else if (dumpRiskTop10 != null && dumpRiskTop10 > 70) warnings.push(`Dump risk: the top 10 holders together could crash the price ≈${dumpRiskTop10.toFixed(0)}%.`);
   if (r?.mutableMetadata) warnings.push("Token metadata is mutable (name/image can be changed).");
   if (ageHours != null && ageHours < 1) warnings.push("Less than 1 hour old — extremely high failure rate for new launches.");
   if (t.liquidityUsd < settings.memeMinLiquidityUsd) warnings.push(`Liquidity below your minimum ($${settings.memeMinLiquidityUsd.toLocaleString()}).`);
@@ -188,6 +224,13 @@ export function analyzeMeme(t: MemeToken, settings: Settings, opts: { prevLiquid
     { id: "critical", label: "No critical red flags", passed: critical.length === 0, detail: critical.length ? critical.join(" ") : "None detected (this does not mean safe).", severity: "reject" },
     { id: "verified", label: "Contract risk report available", passed: !!r?.fetched, detail: r?.fetched ? `From ${r.source}.` : "Unverified token.", severity: "reject" },
     { id: "liq", label: `Liquidity ≥ $${settings.memeMinLiquidityUsd.toLocaleString()}`, passed: t.liquidityUsd >= settings.memeMinLiquidityUsd, detail: `$${Math.round(t.liquidityUsd).toLocaleString()}.`, severity: "reject" },
+    {
+      id: "dump",
+      label: "Single-holder dump risk ≤ 65%",
+      passed: dumpRiskTop1 != null && dumpRiskTop1 <= 65,
+      detail: dumpRiskTop1 == null ? "Unknown — no holder data." : `Largest holder selling would move price ≈${dumpRiskTop1.toFixed(0)}%.`,
+      severity: "reject",
+    },
     { id: "slip", label: "Estimated price impact ≤ 3%", passed: slippagePct <= 3, detail: `${slippagePct.toFixed(2)}% for $${settings.memeTradeSizeUsd}.`, severity: "reject" },
     { id: "warn", label: "Fewer than 3 warnings", passed: warnings.length < 3, detail: `${warnings.length} warnings.`, severity: "reject" },
     { id: "score", label: `Quality score ≥ ${settings.minQualityScore}`, passed: score >= settings.minQualityScore, detail: `Score ${score}/100.`, severity: "reject" },
@@ -208,7 +251,11 @@ export function analyzeMeme(t: MemeToken, settings: Settings, opts: { prevLiquid
     { price: price + 5 * risk, r: 5, closePct: 25 },
   ];
   const blended = tps.reduce((s, x) => s + (x.r * x.closePct) / 100, 0);
-  const maxPos = Math.min((settings.accountEquity * settings.memeMaxPositionPct) / 100, t.liquidityUsd * 0.01);
+  // Gap-aware sizing: memecoins can fall far past the stop in one candle. Size the position so that
+  // even the estimated dump (largest holder selling, at least 50%) costs no more than the risk budget.
+  const worstCaseLoss = Math.max(volPct / 100, (dumpRiskTop1 ?? 90) / 100, 0.5);
+  const gapCap = (settings.accountEquity * settings.riskPerTradePct) / 100 / worstCaseLoss;
+  const maxPos = Math.min((settings.accountEquity * settings.memeMaxPositionPct) / 100, t.liquidityUsd * 0.01, gapCap);
   const position =
     direction === "BUY" || direction === "WAIT"
       ? planPosition({ equity: settings.accountEquity, riskPct: settings.riskPerTradePct, entry: price, stop, side: "long", leverage: 1, takerFeeBps: 30, slippageBps: Math.round(slippagePct * 100), maxPositionUsd: maxPos })
@@ -231,6 +278,7 @@ export function analyzeMeme(t: MemeToken, settings: Settings, opts: { prevLiquid
     direction === "BUY"
       ? `If you take it: buy near $${price.toPrecision(4)}, exit if price drops to $${stop.toPrecision(4)} (−${volPct.toFixed(0)}%, wide because memecoins swing hard), and sell in parts at +${(1.5 * volPct).toFixed(0)}%, +${(3 * volPct).toFixed(0)}% and +${(5 * volPct).toFixed(0)}%.`
       : "",
+    dumpRiskTop1 != null ? `Gap risk: a stop-loss does NOT protect against a one-candle dump. If the largest holder sold, price could fall ≈${dumpRiskTop1.toFixed(0)}% instantly — the position size is capped so that even that costs at most your risk budget.` : "",
     "No check can prove a memecoin is safe. Never risk money you cannot afford to lose entirely.",
   ]
     .filter(Boolean)
@@ -265,5 +313,5 @@ export function analyzeMeme(t: MemeToken, settings: Settings, opts: { prevLiquid
     dataSources: ["DexScreener", r?.source ?? "RugCheck (unavailable)"],
   };
 
-  return { token: t, score, factors, category, critical, warnings, reasons, slippagePct, liquidityChangePct, ageHours, signal };
+  return { token: t, score, factors, category, critical, warnings, reasons, slippagePct, dumpRiskTop1, dumpRiskTop10, liquidityChangePct, ageHours, signal };
 }

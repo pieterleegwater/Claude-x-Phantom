@@ -5,6 +5,7 @@ import { useSyncExternalStore } from "react";
 import { DEFAULT_SETTINGS, type Settings } from "../settings";
 import { newPaperState, migratePaper, type PaperState } from "../paper";
 import { emptyLive, type LiveState } from "../live";
+import type { MemeOutcome } from "../memeTrack";
 import type { TradeSignal } from "../types";
 
 export interface AppNotification {
@@ -56,6 +57,7 @@ export interface AppState {
   ticket: TicketDraft | null;
   aiAccessCode: string;
   live: LiveState; // real-money positions & trades (tracking only)
+  memeOutcomes: Record<string, MemeOutcome>; // forward test of scanner BUY signals
   liveAlert: { mint: string; kind: "stop" | "tp"; price: number; pct: number; index?: number; at: number } | null;
 }
 
@@ -72,6 +74,7 @@ const initial = (): AppState => ({
   ticket: null,
   live: emptyLive(),
   liveAlert: null,
+  memeOutcomes: {},
   aiAccessCode: "",
 });
 

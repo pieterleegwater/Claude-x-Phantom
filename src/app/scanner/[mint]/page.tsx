@@ -83,6 +83,7 @@ export default function TokenPage({ params }: { params: Promise<{ mint: string }
               <Stat label="Buys / sells 1h" value={`${t.txns.h1.buys} / ${t.txns.h1.sells}`} sub={`24h ${t.txns.h24.buys} / ${t.txns.h24.sells}`} />
               <Stat label="Holders" value={risk?.totalHolders ? compact(risk.totalHolders) : t.holderCount ? compact(t.holderCount.value) : "—"} sub={risk?.totalHolders ? "RugCheck" : t.holderCount?.source ?? "unavailable"} />
               <Stat label="Top 10 holders" value={risk?.top10Pct != null ? `${risk.top10Pct.toFixed(1)}%` : "—"} tone={risk?.top10Pct != null && risk.top10Pct > 35 ? "warn" : undefined} sub="excluding pools" />
+              <Stat label="Dump risk" value={a.dumpRiskTop1 == null ? "unknown" : `−${a.dumpRiskTop1.toFixed(0)}%`} tone={a.dumpRiskTop1 == null || a.dumpRiskTop1 > 40 ? "bear" : undefined} sub={a.dumpRiskTop10 != null ? `if largest holder sells · top 10: −${a.dumpRiskTop10.toFixed(0)}%` : "if largest holder sells"} />
               <Stat label={<Term k="slippage">Est. price impact</Term>} value={`${a.slippagePct.toFixed(2)}%`} sub={`for $${settings.memeTradeSizeUsd} (pool model)`} tone={a.slippagePct > 3 ? "warn" : undefined} />
             </div>
           </Card>

@@ -105,6 +105,26 @@ describe("memecoin engine", () => {
     expect(a.score).toBeLessThanOrEqual(60);
     expect(a.signal.direction).not.toBe("BUY");
   });
+  it("dump risk: a holder that can crash the price >65% blocks BUY", () => {
+    const t = baseToken();
+    t.risk!.topHolders = [{ address: "whale", pct: 12 }]; // 12% of $3M = $360k into a $200k quote side
+    const a = analyzeMeme(t, DEFAULT_SETTINGS);
+    expect(a.dumpRiskTop1!).toBeGreaterThan(65);
+    expect(a.signal.direction).not.toBe("BUY");
+    expect(a.signal.rules.find((r) => r.id === "dump")?.passed).toBe(false);
+  });
+  it("gap-aware sizing: a full dump costs at most the risk budget", () => {
+    const a = analyzeMeme(baseToken(), DEFAULT_SETTINGS);
+    const budget = (DEFAULT_SETTINGS.accountEquity * DEFAULT_SETTINGS.riskPerTradePct) / 100;
+    const worst = Math.max(0.5, a.dumpRiskTop1! / 100);
+    expect(a.signal.position!.notionalUsd * worst).toBeLessThanOrEqual(budget + 1e-6);
+  });
+  it("unknown holders => no BUY", () => {
+    const t = baseToken();
+    t.risk!.topHolders = [];
+    t.risk!.top10Pct = null;
+    expect(analyzeMeme(t, DEFAULT_SETTINGS).signal.direction).not.toBe("BUY");
+  });
   it("tiny liquidity => AVOID", () => {
     const t = baseToken();
     t.liquidityUsd = 5_000;
