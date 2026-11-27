@@ -2,7 +2,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Radar, Coins, Bitcoin, FlaskConical, Gamepad2, ShieldHalf, History, Settings as Cog, Bell, GraduationCap, Menu, X, CheckCheck, MoreHorizontal, Zap } from "lucide-react";
+import { LayoutDashboard, Radar, Coins, Bitcoin, FlaskConical, Gamepad2, ShieldHalf, History, Settings as Cog, Bell, GraduationCap, Menu, X, CheckCheck, MoreHorizontal, Zap, Bot } from "lucide-react";
 import { hydrate, setState, useStore } from "@/lib/client/store";
 import { useTicker } from "@/lib/client/hooks";
 import { SolanaProviders, WalletButton, useWalletData } from "./wallet";
@@ -13,6 +13,7 @@ import { GLOSSARY } from "@/lib/glossary";
 
 const NAV = [
   { href: "/", label: "Overview", icon: LayoutDashboard },
+  { href: "/autopilot", label: "Autopilot", icon: Bot },
   { href: "/signals", label: "AI Signals", icon: Radar },
   { href: "/scanner", label: "Memecoin Scanner", icon: Coins },
   { href: "/bitcoin", label: "Bitcoin Terminal", icon: Bitcoin },
@@ -61,7 +62,7 @@ const TABS = [
   { href: "/", label: "Overview", icon: LayoutDashboard },
   { href: "/signals", label: "Signals", icon: Radar },
   { href: "/scanner", label: "Scanner", icon: Coins },
-  { href: "/bitcoin", label: "BTC", icon: Bitcoin },
+  { href: "/autopilot", label: "Autopilot", icon: Bot },
   { href: "/paper", label: "Paper", icon: Gamepad2 },
 ];
 

@@ -234,7 +234,7 @@ export function analyzeBtc(input: BtcEngineInput): BtcAnalysis {
   const btCfg = { ...DEFAULT_BT, feeBps: settings.takerFeeBps, slippageBps: settings.slippageBps, riskPct: settings.riskPerTradePct, fundingPer8h: isPerp ? (input.derivatives?.funding8h ?? 0.0001) : 0, funding: isPerp ? funding : undefined };
 
   // 2 + 3: evaluate strategies & measure them
-  const statuses: StrategyStatus[] = STRATEGIES.map((st) => {
+  const statuses: StrategyStatus[] = STRATEGIES.filter((s) => !s.benchmark).map((st) => {
     const p = defaultParams(st);
     if (!isPerp) p.allowShorts = 0; // spot cannot be shorted
     if (st.requiresFunding && !funding) {

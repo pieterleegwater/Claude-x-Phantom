@@ -115,7 +115,7 @@ async function candidateMints(): Promise<{ mints: string[]; sources: string[]; e
 
 // ---------------- RugCheck ----------------
 interface RcReport {
-  token?: { mintAuthority: string | null; freezeAuthority: string | null; decimals?: number };
+  token?: { mintAuthority: string | null; freezeAuthority: string | null; decimals?: number; supply?: number };
   tokenMeta?: { mutable?: boolean };
   topHolders?: { address: string; owner?: string; pct: number; insider?: boolean }[];
   risks?: { name: string; value?: string; description: string; level: string }[];
@@ -125,6 +125,11 @@ interface RcReport {
   rugged?: boolean;
   score?: number;
   graphInsidersDetected?: number;
+  creator?: string;
+  creatorBalance?: number;
+  creatorTokens?: { mint: string; marketCap?: number; createdAt?: string }[] | null;
+  insiderNetworks?: { size?: number; tokenAmount?: number }[] | null;
+  transferFee?: { pct?: number };
 }
 
 export async function rugcheck(mint: string): Promise<TokenRisk & { decimals?: number }> {
@@ -138,6 +143,7 @@ export async function rugcheck(mint: string): Promise<TokenRisk & { decimals?: n
         .filter((h) => !(known[h.owner ?? ""]?.type === "AMM" || known[h.address]?.type === "AMM" || marketKeys.has(h.owner ?? "") || marketKeys.has(h.address)))
         .map((h) => ({ address: h.owner ?? h.address, pct: Number(h.pct) || 0, insider: !!h.insider }))
         .sort((a, b) => b.pct - a.pct);
+      const supply = Number(r.token?.supply) || 0;
       const lpPcts = (r.markets ?? []).map((m) => m.lp?.lpLockedPct).filter((x): x is number => typeof x === "number");
       return {
         source: "RugCheck",
@@ -153,6 +159,13 @@ export async function rugcheck(mint: string): Promise<TokenRisk & { decimals?: n
         totalHolders: r.totalHolders ?? null,
         insidersDetected: r.graphInsidersDetected ?? null,
         mutableMetadata: r.tokenMeta?.mutable ?? null,
+        creator: r.creator ?? null,
+        creatorPct: supply > 0 && typeof r.creatorBalance === "number" ? (r.creatorBalance / supply) * 100 : null,
+        creatorTokenCount: Array.isArray(r.creatorTokens) ? r.creatorTokens.filter((x) => x.mint !== mint).length : null,
+        creatorRuggedCount: Array.isArray(r.creatorTokens) ? r.creatorTokens.filter((x) => x.mint !== mint && typeof x.marketCap === "number" && x.marketCap < 5_000).length : null,
+        insiderNetworkPct: supply > 0 && Array.isArray(r.insiderNetworks) ? (r.insiderNetworks.reduce((t, n) => t + (Number(n.tokenAmount) || 0), 0) / supply) * 100 : null,
+        insiderNetworks: Array.isArray(r.insiderNetworks) ? r.insiderNetworks.length : null,
+        transferFeePct: typeof r.transferFee?.pct === "number" ? r.transferFee.pct : null,
         decimals: r.token?.decimals,
       };
     });

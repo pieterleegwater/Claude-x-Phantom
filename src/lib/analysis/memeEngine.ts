@@ -27,6 +27,14 @@ export interface TokenRisk {
   totalHolders?: number | null;
   insidersDetected?: number | null;
   mutableMetadata?: boolean | null;
+  // developer / insider intelligence (RugCheck, when reported)
+  creator?: string | null;
+  creatorPct?: number | null; // % of supply still held by the deployer wallet
+  creatorTokenCount?: number | null; // other tokens launched by the same deployer
+  creatorRuggedCount?: number | null; // of those, how many are now dead (mcap near 0)
+  insiderNetworkPct?: number | null; // % of supply held by linked-wallet clusters
+  insiderNetworks?: number | null;
+  transferFeePct?: number | null;
 }
 
 export interface MemeToken {
@@ -188,6 +196,9 @@ export function analyzeMeme(t: MemeToken, settings: Settings, opts: { prevLiquid
   const topOne = r?.topHolders?.[0];
   if (topOne && topOne.pct > 20) critical.push(`A single wallet holds ${topOne.pct.toFixed(1)}% of supply.`);
   if (tx.h1.buys > 50 && tx.h1.sells / Math.max(tx.h1.buys, 1) < 0.08) critical.push(`Almost no sells (${tx.h1.sells}) vs ${tx.h1.buys} buys in 1h — possible honeypot (selling may be blocked).`);
+  if (r?.transferFeePct != null && r.transferFeePct >= 10) critical.push(`Token charges a ${r.transferFeePct.toFixed(0)}% transfer fee on every trade.`);
+  if (r?.creatorRuggedCount != null && r.creatorRuggedCount >= 3) critical.push(`Deployer wallet launched ${r.creatorTokenCount} other tokens, ${r.creatorRuggedCount} of which are now dead — serial rug pattern.`);
+  if (r?.insiderNetworkPct != null && r.insiderNetworkPct > 30) critical.push(`Linked insider wallet clusters control ${r.insiderNetworkPct.toFixed(0)}% of supply — coordinated dump risk.`);
   if (liquidityChangePct != null && liquidityChangePct < -30) critical.push(`Liquidity fell ${liquidityChangePct.toFixed(0)}% since your last scan — possible liquidity pull.`);
 
   if (!r?.fetched) warnings.push("Contract risk report unavailable — could not verify mint/freeze authority or holders.");
@@ -196,6 +207,17 @@ export function analyzeMeme(t: MemeToken, settings: Settings, opts: { prevLiquid
   if (r?.insidersDetected && r.insidersDetected > 0) warnings.push(`${r.insidersDetected} insider/linked wallets detected.`);
   if (dumpRiskTop1 != null && dumpRiskTop1 > 40) warnings.push(`Dump risk: the largest holder alone could crash the price ≈${dumpRiskTop1.toFixed(0)}% by selling.`);
   else if (dumpRiskTop10 != null && dumpRiskTop10 > 70) warnings.push(`Dump risk: the top 10 holders together could crash the price ≈${dumpRiskTop10.toFixed(0)}%.`);
+  if (r?.creatorPct != null && r.creatorPct > 5) warnings.push(`Developer wallet still holds ${r.creatorPct.toFixed(1)}% of supply — it can sell into buyers at any time.`);
+  if (r?.creatorTokenCount != null && r.creatorTokenCount >= 5 && !(r.creatorRuggedCount != null && r.creatorRuggedCount >= 3)) warnings.push(`Deployer has launched ${r.creatorTokenCount} other tokens (serial deployer).`);
+  if (r?.insiderNetworkPct != null && r.insiderNetworkPct > 10 && r.insiderNetworkPct <= 30) warnings.push(`Linked wallet clusters hold ${r.insiderNetworkPct.toFixed(0)}% of supply.`);
+  if (r?.transferFeePct != null && r.transferFeePct > 0 && r.transferFeePct < 10) warnings.push(`Transfer fee of ${r.transferFeePct.toFixed(1)}% per trade.`);
+  // wash-trading / bot heuristics from public pair data (no wallet-level tracking available for free)
+  const trades24 = tx.h24.buys + tx.h24.sells;
+  const avgTrade24 = trades24 > 0 ? v.h24 / trades24 : NaN;
+  const balance1 = trades1 > 40 ? Math.min(tx.h1.buys, tx.h1.sells) / Math.max(tx.h1.buys, tx.h1.sells) : 0;
+  if (trades1 > 300 && balance1 > 0.92 && Math.abs(pc.h1) < 3) warnings.push(`Suspicious pattern: ${trades1} trades in 1h with almost perfectly balanced buys/sells and a flat price — typical of wash-trading bots inflating volume.`);
+  if (Number.isFinite(avgTrade24) && avgTrade24 < 15 && trades24 > 5000) warnings.push(`Average trade only $${avgTrade24.toFixed(0)} over ${trades24.toLocaleString()} trades — volume likely bot-generated.`);
+  if (accel5 > 6 && Math.abs(pc.m5) < 1) warnings.push("5-minute volume spiked >6x with no price move — possible volume painting.");
   if (r?.mutableMetadata) warnings.push("Token metadata is mutable (name/image can be changed).");
   if (ageHours != null && ageHours < 1) warnings.push("Less than 1 hour old — extremely high failure rate for new launches.");
   if (t.liquidityUsd < settings.memeMinLiquidityUsd) warnings.push(`Liquidity below your minimum ($${settings.memeMinLiquidityUsd.toLocaleString()}).`);

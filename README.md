@@ -105,7 +105,39 @@ Not required. Settings, paper account, alerts and the strategy leaderboard are s
 - Transactions: the preview shows token, amounts, minimum received, slippage, price impact, route, network fee, destination and a sell-back (honeypot) check. **Nothing is signed automatically.**
 
 ### Enabling execution (opt-in architecture)
-Execution is off. If you deliberately set both `ENABLE_LIVE_EXECUTION=true` and `NEXT_PUBLIC_ENABLE_LIVE_EXECUTION=true`, the token page's preview gains a button that: requires a 4-item checklist + typing `CONFIRM` → asks the server to build an **unsigned** Jupiter swap for your public key (max $10k) → **simulates** it → hands it to Phantom, where you approve or reject. There is no autonomous trading. Understand the risks before enabling.
+Execution is off. If you deliberately set both `ENABLE_LIVE_EXECUTION=true` and `NEXT_PUBLIC_ENABLE_LIVE_EXECUTION=true`, the token page's preview gains a button that: requires a 4-item checklist + typing `CONFIRM` → asks the server to build an **unsigned** Jupiter swap for your public key (max $10k) → **simulates** it → hands it to Phantom, where you approve or reject. This Phantom flow never trades autonomously; autonomous trading exists only for Hyperliquid perps in the separate Autopilot engine below. Understand the risks before enabling.
+
+---
+
+## Autopilot — autonomous perps engine (Hyperliquid)
+
+Phantom cannot trade perpetual futures, so the autonomous engine executes on **Hyperliquid** through its official API (SDK `@nktkas/hyperliquid`). Solana memecoins are **not** traded autonomously (that would require a server-held Solana key and has uncontrollable rug/gap risk); the scanner only analyses them.
+
+**How it runs.** `netlify/functions/engine-tick.mts` is a Netlify Scheduled Function that runs **every minute**, 24/7, also when the browser is closed. State (positions, trades, validation, alerts) lives in **Netlify Blobs** (`.data/engine.json` locally). The dashboard is at **/autopilot**.
+
+**Each cycle** (`src/lib/engine/engine.ts`):
+1. Sync positions with the broker: stop/TP fills, funding, liquidation, venue truth.
+2. STOP ALL active → close every position, block everything.
+3. Roll daily/weekly bookkeeping → automatic shutdown at −1.5 % day (until next UTC day) or −5 % from the weekly peak (manual review).
+4. Manage open positions: break-even after 1R (+fees), ATR trailing after TP1, exit when the strategy's thesis is invalidated, on an opposite CHOCH, regime flip or time stop.
+5. Walk-forward validation (time-budgeted): every strategy × coin × timeframe is re-tested every 12 h on up to 3000 closed candles: 4 folds, parameters + exit profile chosen in-sample, judged **out-of-sample only** with fees, slippage, funding and liquidation. Validated = ≥ 30 OOS trades, expectancy ≥ 0.05R, PF ≥ 1.1, beats a plain EMA-cross benchmark and stays positive across folds.
+6. Scan: regime (bull/bear trend, range, high/low volatility, breakout) → only strategies **validated for that regime** → entry signal on the last closed candle → venue-aware sizing → 0–100 score (trend, momentum, volume, structure BOS/CHOCH/FVG, HTF alignment, entry quality, R:R, volatility, order-book liquidity, proven edge, funding) with critical flags that override the score.
+7. Decision: live needs ≥ 80, paper ≥ 70, a validated edge and zero flags. Otherwise **WAIT / NO TRADE** with the reason. At most one new entry per cycle; no duplicate positions per coin.
+
+**Risk governor** (`riskGovernor.ts`): 0.5 % risk per trade including fees and slippage; size is rounded **down** and a trade that cannot fit the risk budget (Hyperliquid's $10 minimum) is **skipped, never oversized**; risk halves after 3 consecutive losses (never increased to recover losses — no martingale, no averaging down); cooldown after a loss; max positions and trades per day; leverage is the lowest that fits, capped at 5x live (hard max 10x) and up to 40x in paper, and walked down until the liquidation price is ≥ 1.5× further than the stop.
+
+**Exits.** Default profile TP1 1R 40 % / TP2 2R 35 % / TP3 3R 25 %, BE after 1R, 2×ATR trail; alternatives (runner, fixed 2R) are selected per market by validation.
+
+**Live execution guarantees** (`hlBroker.ts`): isolated margin; IOC entry with a 0.3 % slippage cap; the fill is **read back** from the exchange (never assumed); a reduce-only stop-market is placed immediately and **verified on the order book** — if that fails twice the position is closed at market (emergency protection); TPs are reduce-only limits; stop moves place the new stop before cancelling the old one; every cycle reconciles with the venue and books realized PnL, fees and funding from actual fills.
+
+**A $10 account, honestly.** With 0.5 % risk the budget is $0.05 per trade. Hyperliquid's minimum order is $10 notional, so only stops of ≈ 0.35 % or tighter (after costs) can be traded; wider setups are skipped. Expect few live trades at this size. 40x leverage is available in paper mode only; leverage does not change the risk per trade, only margin and liquidation distance.
+
+### Enabling (paper first)
+1. Set `ENGINE_ADMIN_TOKEN` in Netlify → redeploy → open **/autopilot**, enter the token, turn **Auto trading ON** (paper mode). Let it run; validation fills in during the first cycles.
+2. Live (only after paper results convince you): on app.hyperliquid.xyz create an **API wallet** (More → API; it can trade but cannot withdraw), deposit USDC to your main account. Set `HL_ACCOUNT_ADDRESS` (main address), `HL_AGENT_PRIVATE_KEY` (API wallet key), optionally `HL_TESTNET=true`, and `LIVE_TRADING_ENABLED=true`. Redeploy, switch mode to Live and **arm** it with the typed confirmation.
+3. **STOP ALL** (dashboard) turns auto off and closes all positions at market. Stops remain resting on the exchange even if the server is down.
+
+No strategy is presumed profitable: if nothing passes out-of-sample validation the engine simply waits. Results shown are from real fills (live) or simulation (paper), never invented.
 
 ---
 
