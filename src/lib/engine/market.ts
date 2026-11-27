@@ -18,8 +18,8 @@ export interface MarketFeed {
 
 export class HyperliquidFeed implements MarketFeed {
   private info: InfoClient;
-  constructor(isTestnet = false) {
-    this.info = new InfoClient({ transport: new HttpTransport({ isTestnet, timeout: 10_000 }) });
+  constructor(isTestnet = false, info?: InfoClient) {
+    this.info = info ?? new InfoClient({ transport: new HttpTransport({ isTestnet, timeout: 10_000 }) });
   }
   async assets(coins: string[]) {
     const [meta, ctxs] = await this.info.metaAndAssetCtxs();

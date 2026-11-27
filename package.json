@@ -10,7 +10,8 @@
     "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "validate:testnet": "tsx scripts/hl-testnet-validate.ts"
+    "validate:testnet": "node --env-file=.env.testnet --import tsx scripts/hl-testnet-validate.ts",
+    "testnet:check": "node --env-file=.env.testnet --import tsx scripts/hl-testnet-validate.ts --check"
   },
   "engines": {
     "node": ">=20.9"

@@ -12,3 +12,4 @@ coverage
 .data
 testnet-report.md
 testnet-report.json
+.env.testnet

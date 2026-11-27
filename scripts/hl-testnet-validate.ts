@@ -1,8 +1,11 @@
 /* Hyperliquid TESTNET integration validation for the Autopilot live broker.
  *
- *   HL_TESTNET=true HL_ACCOUNT_ADDRESS=0x… HL_AGENT_PRIVATE_KEY=0x… npm run validate:testnet
+ *   npm run testnet:check      (preflight only — no orders)
+ *   npm run validate:testnet   (full run — real TESTNET orders)
  *
- * Refuses to run unless HL_TESTNET=true. Places REAL testnet orders (BTC, ≈$11 notional) and
+ * Both read .env.testnet (gitignored). Refuses to run unless HL_TESTNET=true, LIVE_TRADING_ENABLED
+ * is not "true", and the key is an API wallet (not the account's own key). Every HTTP request is
+ * checked: anything that is not api.hyperliquid-testnet.xyz aborts the process. Places REAL testnet orders (BTC, ≈$11 notional) and
  * records every result with exchange evidence (order ids, fills, positions, open orders).
  * Writes testnet-report.md + testnet-report.json in the current directory.
  *
@@ -11,6 +14,7 @@
  */
 import { writeFileSync } from "node:fs";
 import { ExchangeClient, HttpTransport, InfoClient } from "@nktkas/hyperliquid";
+const TESTNET_API_URL = "https://api.hyperliquid-testnet.xyz";
 import { privateKeyToAccount } from "viem/accounts";
 import { HyperliquidBroker, fmtPx, fmtSz, type HlExchange, type HlInfo } from "../src/lib/engine/hlBroker";
 import { HyperliquidFeed, type AssetInfo } from "../src/lib/engine/market";
@@ -29,17 +33,41 @@ async function step(test: string, fn: () => Promise<string>) {
 }
 function must(cond: unknown, msg: string): asserts cond { if (!cond) throw new Error(msg); }
 
-async function main() {
-  if (process.env.HL_TESTNET !== "true") { console.error("Refusing to run: set HL_TESTNET=true (this script must never touch mainnet)."); process.exit(2); }
-  const user = (process.env.HL_ACCOUNT_ADDRESS ?? "") as `0x${string}`;
-  const key = (process.env.HL_AGENT_PRIVATE_KEY ?? "") as `0x${string}`;
-  if (!/^0x[0-9a-fA-F]{40}$/.test(user) || !/^0x[0-9a-fA-F]{64}$/.test(key)) { console.error("HL_ACCOUNT_ADDRESS / HL_AGENT_PRIVATE_KEY missing or malformed."); process.exit(2); }
+const stop = (msg: string): never => { console.error(`\nSTOPPED: ${msg}\n`); process.exit(2); };
 
-  const transport = new HttpTransport({ isTestnet: true, timeout: 10_000 });
+// Hard network guard: the only host this process may contact is the Hyperliquid TESTNET API.
+const realFetch = globalThis.fetch;
+const contacted = new Set<string>();
+globalThis.fetch = (async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+  const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
+  if (url.host !== "api.hyperliquid-testnet.xyz") stop(`blocked a request to ${url.host} — only api.hyperliquid-testnet.xyz is allowed.`);
+  contacted.add(url.host);
+  return realFetch(input, init);
+}) as typeof fetch;
+
+async function main() {
+  const checkOnly = process.argv.includes("--check");
+  if (process.env.HL_TESTNET !== "true") stop("HL_TESTNET is not exactly \"true\" — this script must never touch mainnet.");
+  if (process.env.LIVE_TRADING_ENABLED === "true") stop("LIVE_TRADING_ENABLED=true is set. Remove it — live trading must stay disabled during validation.");
+  const user = (process.env.HL_ACCOUNT_ADDRESS ?? "").trim() as `0x${string}`;
+  const key = (process.env.HL_AGENT_PRIVATE_KEY ?? "").trim() as `0x${string}`;
+  if (!/^0x[0-9a-fA-F]{40}$/.test(user)) stop("HL_ACCOUNT_ADDRESS missing or malformed (expected 0x + 40 hex characters).");
+  if (!/^0x[0-9a-fA-F]{64}$/.test(key)) stop("HL_AGENT_PRIVATE_KEY missing or malformed (expected 0x + 64 hex characters).");
+  const agent = privateKeyToAccount(key);
+  if (agent.address.toLowerCase() === user.toLowerCase()) stop("HL_AGENT_PRIVATE_KEY belongs to the account itself. Use a separate API wallet key, never the account's own private key.");
+
+  const transport = new HttpTransport({ apiUrl: TESTNET_API_URL, timeout: 10_000 });
+  if (!String(transport.apiUrl).includes("hyperliquid-testnet.xyz")) stop(`transport points at ${transport.apiUrl}, not testnet.`);
+  console.log(`Network : TESTNET (${transport.apiUrl})`);
+  console.log(`Account : ${user}`);
+  console.log(`API wallet (agent): ${agent.address}  — key never printed`);
+  console.log(`LIVE_TRADING_ENABLED: ${process.env.LIVE_TRADING_ENABLED ?? "(not set)"}\n`);
   const info = new InfoClient({ transport });
-  const ex = new ExchangeClient({ transport, wallet: privateKeyToAccount(key) });
-  const broker = new HyperliquidBroker(user, key, { isTestnet: true });
-  const feed = new HyperliquidFeed(true);
+  const ex = new ExchangeClient({ transport, wallet: agent });
+  const broker = new HyperliquidBroker(user, null, { clients: { info: info as never, ex: ex as never } });
+  const feed = new HyperliquidFeed(true, info);
+  const startedAt = Date.now();
+  let traded = false; // cleanup only touches the account if this run placed orders
   const COIN = "BTC";
   let assets: Record<string, AssetInfo> = {};
   let s: EngineState = { ...newEngineState({ ...DEFAULT_ENGINE_CONFIG, mode: "live", coins: [COIN] }), liveArmed: true };
@@ -72,9 +100,17 @@ async function main() {
       return `signature accepted; exchange answered: "${m.slice(0, 120)}"`;
     }
   });
+  if (checkOnly) {
+    const ok = rows.every((r) => r.result === "PASS");
+    console.log(`\nPreflight ${ok ? "OK — testnet confirmed, no orders were placed." : "FAILED — fix the items above before the full run."} Hosts contacted: ${[...contacted].join(", ") || "none"}`);
+    process.exitCode = ok ? 0 : 1;
+    return;
+  }
+  if (rows.some((r) => r.result === "FAIL")) { log({ test: "Pre-condition: connectivity, balance and authentication", result: "FAIL", evidence: "stopping before any order is placed" }); return finish(); }
   const pre = await venue().catch(() => null);
   if (!pre || pre.pos[COIN]) { log({ test: "Pre-condition: no open BTC position", result: "FAIL", evidence: pre ? "close the BTC position first" : "venue unreachable" }); return finish(); }
 
+  traded = true;
   // ---------------------------------------------------------------- rejections
   await step("Rejection: order below the $10 minimum", async () => {
     const a = await refresh();
@@ -233,19 +269,36 @@ async function main() {
 
   return finish();
 
-  function finish() {
+  async function finish() {
+    // safety cleanup: never leave testnet positions/orders behind
+    if (traded) try {
+      const v = await venue();
+      const oo = await openOrders();
+      if (Object.keys(v.pos).length || oo.length) {
+        const f = await broker.flattenAll(s, assets, now());
+        log({ test: "Cleanup after run (flattenAll)", result: f.confirmed ? "PASS" : "FAIL", evidence: f.note });
+      }
+    } catch (e) { log({ test: "Cleanup after run", result: "FAIL", evidence: e instanceof Error ? e.message : String(e) }); }
+    // independent record straight from Hyperliquid
+    let fillLines: string[] = [];
+    try {
+      const fills = await info.userFillsByTime({ user, startTime: startedAt - 1000, endTime: Date.now() + 60_000 });
+      fillLines = fills.map((f) => `${new Date(f.time).toISOString()} · oid ${f.oid} · ${f.coin} ${f.dir} ${f.sz} @ ${f.px} · fee ${f.fee} · closedPnl ${f.closedPnl}`);
+    } catch (e) { fillLines = [`could not fetch fills: ${e instanceof Error ? e.message : e}`]; }
     const passed = rows.filter((r) => r.result === "PASS").length;
     const failed = rows.filter((r) => r.result === "FAIL").length;
     const md = [
       `# Hyperliquid testnet validation — ${new Date().toISOString()}`,
-      "", `Account ${user.slice(0, 6)}…${user.slice(-4)} · ${passed} passed · ${failed} failed`, "",
+      "", `Network: **TESTNET** (${TESTNET_API_URL}) · hosts contacted: ${[...contacted].join(", ")}`, "",
+      `Account ${user.slice(0, 6)}…${user.slice(-4)} · API wallet ${agent.address.slice(0, 6)}…${agent.address.slice(-4)} · ${passed} passed · ${failed} failed`, "",
       "| Result | Test | Exchange evidence |", "|---|---|---|",
       ...rows.map((r) => `| ${r.result} | ${r.test} | ${r.evidence.replace(/\|/g, "/")} |`), "",
       "## Orders", ...evidence.orders.map((x) => `- ${x}`), "## Fills", ...evidence.fills.map((x) => `- ${x}`),
       "## Stops", ...evidence.stops.map((x) => `- ${x}`), "## Closes", ...evidence.closes.map((x) => `- ${x}`),
+      "", "## All fills during this run (userFillsByTime — straight from Hyperliquid)", ...fillLines.map((x) => `- ${x}`),
     ].join("\n");
     writeFileSync("testnet-report.md", md);
-    writeFileSync("testnet-report.json", JSON.stringify({ rows, evidence }, null, 2));
+    writeFileSync("testnet-report.json", JSON.stringify({ network: TESTNET_API_URL, rows, evidence, fills: fillLines }, null, 2));
     console.log(`\n${passed} passed, ${failed} failed — see testnet-report.md`);
     process.exitCode = failed ? 1 : 0;
   }
