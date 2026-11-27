@@ -24,8 +24,9 @@ export function brokerFor(s: EngineState): { broker: Broker | null; why?: string
   const env = liveEnv();
   if (!env.enabled) return { broker: null, why: "Live mode selected but LIVE_TRADING_ENABLED is not 'true' on the server." };
   if (!env.configured) return { broker: null, why: "Live mode selected but HL_ACCOUNT_ADDRESS / HL_AGENT_PRIVATE_KEY are missing or malformed." };
+  if ((process.env.ENGINE_ADMIN_TOKEN ?? "").length < 16) return { broker: null, why: "Live trading requires ENGINE_ADMIN_TOKEN (≥16 characters) so nobody else can control the engine." };
   if (!s.liveArmed && !(s.killSwitch && s.positions.some((p) => p.mode === "live"))) return { broker: null, why: "Live mode not armed in the dashboard." };
-  return { broker: new HyperliquidBroker(env.user!, env.key!, env.testnet) };
+  return { broker: new HyperliquidBroker(env.user!, env.key!, { isTestnet: env.testnet }) };
 }
 
 export const feedFor = () => new HyperliquidFeed(liveEnv().testnet);

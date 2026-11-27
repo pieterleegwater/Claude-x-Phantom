@@ -112,6 +112,7 @@ export interface EnginePosition {
   lastFundingAt: number;
   exitNotional?: number; // cumulative, for the average exit price
   exitQty?: number;
+  unprotected?: boolean; // live: no verified stop on the exchange (protection retried every cycle)
 }
 
 export interface ClosedTrade {
@@ -206,6 +207,9 @@ export interface EngineState {
   alerts: EngineAlert[];
   lastTick: { at: number; ms: number; ok: boolean; error?: string; notes: string[] } | null;
   lastCandleCheck: Record<string, number>; // coin -> last 1m candle time processed (paper fills)
+  /** live: an entry order whose outcome was not confirmed yet (adopted by the next sync if it filled) */
+  flattenConfirmedAt?: number | null; // STOP ALL: when the venue confirmed 0 positions / 0 orders
+  pendingEntry?: { coin: string; side: "long" | "short"; at: number; stop: number; tps: { price: number; pct: number }[]; tf: ExecTf; strategyId: string; exitProfile: string; score: number; thesis: string; leverage: number } | null;
 }
 
 export function newEngineState(cfg: EngineConfig = DEFAULT_ENGINE_CONFIG): EngineState {

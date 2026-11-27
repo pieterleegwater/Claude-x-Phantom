@@ -137,6 +137,11 @@ Phantom cannot trade perpetual futures, so the autonomous engine executes on **H
 2. Live (only after paper results convince you): on app.hyperliquid.xyz create an **API wallet** (More → API; it can trade but cannot withdraw), deposit USDC to your main account. Set `HL_ACCOUNT_ADDRESS` (main address), `HL_AGENT_PRIVATE_KEY` (API wallet key), optionally `HL_TESTNET=true`, and `LIVE_TRADING_ENABLED=true`. Redeploy, switch mode to Live and **arm** it with the typed confirmation.
 3. **STOP ALL** (dashboard) turns auto off and closes all positions at market. Stops remain resting on the exchange even if the server is down.
 
+### Testnet validation (required before live)
+`npm run validate:testnet` with `HL_TESTNET=true`, `HL_ACCOUNT_ADDRESS` and `HL_AGENT_PRIVATE_KEY` of a **testnet** account (≥ $25 from the testnet faucet, API wallet approved). It refuses to run without `HL_TESTNET=true`, places real testnet orders (~$11 BTC) and writes `testnet-report.md` with the exchange evidence. It checks market data, balance, agent authentication, min-size and no-fill rejections, timeouts, an entry with a verified fill, a verified stop and TP orders, duplicate prevention, stop modification, size reconciliation, restart recovery, a verified close with PnL from fills, closing an untracked position that has no stop, and STOP ALL confirmed by the exchange. Failure modes that cannot be forced on a real exchange (a stop rejected after a fill, a timeout after acceptance, a failed emergency close, partial fills, margin rejections) are covered by `tests/hlBroker.test.ts` against a scripted exchange.
+
+Live also requires `ENGINE_ADMIN_TOKEN`. Use a dedicated Hyperliquid account or sub-account: the engine closes any position in its coins that has **no stop-loss** and that it does not track.
+
 No strategy is presumed profitable: if nothing passes out-of-sample validation the engine simply waits. Results shown are from real fills (live) or simulation (paper), never invented.
 
 ---

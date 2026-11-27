@@ -153,3 +153,18 @@ export function sizePosition(i: SizingInput): SizingResult {
     feesUsd: notional * (c.takerFeeBps * 2) / 10_000,
   };
 }
+
+/** Partial targets whose order value would be below the exchange minimum are merged into the next
+ *  target (the last target always takes the remainder). Never increases position size. */
+export function mergeSmallTargets(tps: { price: number; pct: number }[], qty: number, min = HL_MIN_NOTIONAL) {
+  const out: { price: number; pct: number }[] = [];
+  let carry = 0;
+  tps.forEach((t, k) => {
+    const pct = t.pct + carry;
+    const last = k === tps.length - 1;
+    if (!last && (qty * pct) / 100 * t.price < min) { carry = pct; return; }
+    carry = 0;
+    out.push({ price: t.price, pct: last ? 100 - out.reduce((a, x) => a + x.pct, 0) : pct });
+  });
+  return out;
+}

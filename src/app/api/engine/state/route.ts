@@ -10,6 +10,7 @@ export async function GET(req: Request) {
   const rl = limited(req, "engine-state", 60);
   if (rl) return rl;
   const auth = engineAuth(req);
+  if (!auth.configured && liveEnv().enabled) return NextResponse.json({ ok: false, error: "LIVE_TRADING_ENABLED is set but ENGINE_ADMIN_TOKEN is missing — the engine refuses to expose or run live without it." }, { status: 403 });
   if (auth.configured && !auth.ok) return NextResponse.json({ ok: false, error: "Engine token required.", needsToken: true }, { status: 401 });
   try {
     const { state } = await loadState();

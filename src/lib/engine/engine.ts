@@ -14,7 +14,7 @@ import { getStrategy, Indicators } from "../strategies";
 import { closedCandles, TF_MS, type AssetInfo, type FeedTf, type MarketFeed } from "./market";
 import { bookImbalance } from "./features";
 import { readRegime, type MarketRegime } from "./regime";
-import { evaluateLimits, rollPeriods, roundPrice, sizePosition } from "./riskGovernor";
+import { evaluateLimits, mergeSmallTargets, rollPeriods, roundPrice, sizePosition } from "./riskGovernor";
 import { scoreOpportunity } from "./scoring";
 import { manageExit } from "./exits";
 import { selectStrategies, TRADABLE_STRATEGIES, validateStrategy } from "./validation";
@@ -56,11 +56,10 @@ export async function runCycle(state: EngineState, deps: CycleDeps): Promise<Eng
 
     // 2. emergency stop: flatten
     if (s.killSwitch) {
-      for (const p of s.positions.filter((x) => x.mode === broker.mode)) {
-        const r = await broker.close(s, p.id, "EMERGENCY STOP", assets, now);
-        s = alert(r.s, "critical", r.ok ? `Emergency stop: ${p.coin} position closed.` : `Emergency stop: FAILED to close ${p.coin}: ${r.note}`, now);
-      }
-      return finish(s, now, t0, true, [...notes, "Emergency stop active — all trading blocked."]);
+      const f = await broker.flattenAll(s, assets, now);
+      s = { ...f.s, flattenConfirmedAt: f.confirmed ? now : null };
+      s = alert(s, "critical", `Emergency stop: ${f.note}`, now);
+      return finish(s, now, t0, true, [...notes, "Emergency stop active — all trading blocked.", ...f.report]);
     }
 
     // 3. account limits
@@ -170,6 +169,8 @@ export async function runCycle(state: EngineState, deps: CycleDeps): Promise<Eng
           const size = sizePosition({ equity, config: cfg, mode: broker.mode, lossStreak: s.lossStreak, asset, side: sig.side, entry, stop, openRiskUsd: openRisk });
           const sc = scoreOpportunity({ c, htf, side: sig.side, entry, stop, exit: prof, regime: rr, strategyRegimes: st.regimes ?? [], family: st.family, validation: v, asset, book, notional: size.notional || 10, dataAgeSec, tfSec: TF_MS[tf] / 1000, config: cfg });
           const flags = [...sc.flags, ...(size.ok ? [] : size.reasons)];
+          if (asset.markPx > 0 && Math.abs(asset.midPx - asset.markPx) / asset.markPx > 0.005) flags.push(`Mid price deviates ${(Math.abs(asset.midPx - asset.markPx) / asset.markPx * 100).toFixed(2)}% from the mark price — stale or broken market data.`);
+          if (s.pendingEntry) flags.push("An earlier entry is still being verified with the exchange.");
           if (s.positions.some((p) => p.coin === coin && p.mode === broker.mode)) flags.push(`Already in a ${coin} position — no duplicate or overlapping entries.`);
           const minScore = broker.mode === "live" ? cfg.liveMinScore : cfg.paperMinScore;
           const decision: Opportunity["decision"] = flags.length ? "NO_TRADE" : sc.score >= minScore ? "TRADE" : sc.score >= 70 ? "PAPER_ONLY" : "NO_TRADE";
@@ -195,7 +196,7 @@ export async function runCycle(state: EngineState, deps: CycleDeps): Promise<Eng
         const prof = EXIT_PROFILES.find((e) => e.id === v?.exitProfile) ?? EXIT_PROFILES[0];
         const r = await broker.open(s, {
           coin: best.coin, asset, side: best.side, qty: best.qty, refPrice: asset.midPx, stop: best.stop,
-          tps: (best.tps ?? []).map((px, k) => ({ price: px, pct: prof.tps[k]?.pct ?? 100 })), leverage: best.leverage ?? 1, liqPrice: best.liqPrice ?? null,
+          tps: mergeSmallTargets((best.tps ?? []).map((px, k) => ({ price: px, pct: prof.tps[k]?.pct ?? 100 })), best.qty), leverage: best.leverage ?? 1, liqPrice: best.liqPrice ?? null,
           tf: best.tf, strategyId: best.strategyId, exitProfile: prof.id, score: best.score, thesis: best.reasons[0] ?? "", regime: best.regime,
         }, now);
         s = r.ok ? { ...r.s, tradesToday: r.s.tradesToday + 1 } : r.s;

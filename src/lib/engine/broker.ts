@@ -23,6 +23,7 @@ export interface EntryIntent {
 }
 
 export interface BrokerResult { s: EngineState; ok: boolean; note: string; critical?: boolean }
+export interface FlattenResult extends BrokerResult { confirmed: boolean; report: string[] }
 
 export interface Broker {
   mode: EngineMode;
@@ -32,6 +33,8 @@ export interface Broker {
   open(s: EngineState, intent: EntryIntent, now: number): Promise<BrokerResult>;
   moveStop(s: EngineState, posId: string, stop: number, assets: Record<string, AssetInfo>): Promise<BrokerResult>;
   close(s: EngineState, posId: string, reason: string, assets: Record<string, AssetInfo>, now: number): Promise<BrokerResult>;
+  /** STOP ALL: close everything and cancel all orders; confirmed only when the venue shows nothing open. */
+  flattenAll(s: EngineState, assets: Record<string, AssetInfo>, now: number): Promise<FlattenResult>;
 }
 
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
@@ -149,6 +152,19 @@ export class PaperBroker implements Broker {
       feesUsd: fee, fundingUsd: 0, realizedUsd: -fee, lastPrice: x.refPrice, maxFavorableR: 0, lastFundingAt: now,
     });
     return { s, ok: true, note: `SIMULATED ${x.side} ${x.qty} ${x.coin} @ ${fill.toPrecision(6)} (${x.leverage}x), stop ${x.stop.toPrecision(6)}.` };
+  }
+
+  async flattenAll(s0: EngineState, assets: Record<string, AssetInfo>, now: number): Promise<FlattenResult> {
+    let s = s0;
+    const report: string[] = [];
+    for (const p of s0.positions.filter((x) => x.mode === "paper")) {
+      const r = await this.close(s, p.id, "EMERGENCY STOP", assets, now);
+      s = r.s;
+      report.push(`${p.coin}: ${r.note}`);
+    }
+    const left = s.positions.filter((x) => x.mode === "paper").length;
+    report.push(left ? `${left} simulated position(s) still open.` : "All simulated positions closed.");
+    return { s, ok: left === 0, confirmed: left === 0, note: report.join(" "), report };
   }
 
   async moveStop(s: EngineState, posId: string, stop: number): Promise<BrokerResult> {
